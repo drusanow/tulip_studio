@@ -433,6 +433,7 @@ static void m_init(void) {
     pattern_default(&g_pat);
     g_pat.bpm = (uint16_t)((studio_bpm_x100() + 50) / 100);
     storage_init();
+    cv_dac_set_pitch_max(storage_cv_5v() ? 5.0f : CV_MAX_V);
     preset_init();   // the preset played last, with every change kept
     preview_init();
     seq_engine_init(&s_eng, &g_pat, esp_random());

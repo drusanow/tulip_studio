@@ -25,6 +25,9 @@ void storage_set_cur_preset(int slot);
 // Where a preset comes in while playing (swap_at_t, seq_clock.h); kept too.
 int storage_swap_at(void);
 void storage_set_swap_at(int v);
+// CV pitch range: false 0-10 V (eurorack), true 0-5 V (+-5 V inputs: AMYboard)
+bool storage_cv_5v(void);
+void storage_set_cv_5v(bool on);
 
 // Projects (UI task only)
 int storage_project_count(void);

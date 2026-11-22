@@ -36,6 +36,14 @@ static i2c_master_bus_handle_t s_bus;
 static uint32_t s_hz;
 static dac_t s_dac[CV_NUM_DACS];
 static int s_lost = -1;
+static float s_pitch_max = CV_MAX_V;
+
+void cv_dac_set_pitch_max(float volts) {
+    s_pitch_max = volts > CV_MAX_V ? CV_MAX_V : volts < 1.0f ? 1.0f : volts;
+    for (int i = 0; i < CV_NUM_DACS; i++) s_dac[i].last_pitch_code = -1;   // resend at the new range
+}
+
+float cv_dac_pitch_max(void) { return s_pitch_max; }
 
 void cv_dac_attach_bus(i2c_master_bus_handle_t bus, uint32_t scl_hz) {
     s_bus = bus;
@@ -122,7 +130,7 @@ bool cv_dac_pitch_cents(int out, int32_t cents) {
     // 1V/oct referenced to CV_V0_MIDI (0V); the GP8413 is unipolar
     float volts = (float)(cents - CV_V0_MIDI * 100) / 1200.0f;
     if (volts < 0.0f) volts = 0.0f;
-    if (volts > CV_MAX_V) volts = CV_MAX_V;
+    while (volts > s_pitch_max + 0.0001f) volts -= 1.0f;   // down an octave: same note name
     uint16_t code = volts_to_code(out, 1, volts);
     if (code == s_dac[out].last_pitch_code) return true;   // no bus time for no change
     bool ok = write_reg(out, PITCH_REG, code);

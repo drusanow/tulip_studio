@@ -195,6 +195,14 @@ cd apps/studio && idf.py set-target esp32s3 && idf.py build
 **CV wiring:**
 * **TRK 1:** Mabee at 0x59. VOUT0 = gate (0/5 V), VOUT1 = pitch, 1 V/oct over the full
   0–10 V (C0 = 0 V, C10 = 10 V).
+* **Pitch range** (SET page): **0-10 V** for eurorack, or **0-5 V** for inputs that
+  take ±5 V, such as AMYboard. In 0-5 V, a note above 5 V drops by octaves
+  instead of clipping.
+* **With an AMYboard sketch (Megatron, Wavetron):**
+  * patch VOUT0 (gate) to CV1 and VOUT1 (pitch) to CV2;
+  * on metroseq's SET page, set Pitch range to **0-5 V**;
+  * on Megatron's CV CAL page, set **0V NOTE** to **12** (C0), so it reads volts the
+    way metroseq sends them. Its default, 60, puts every note 4 octaves high.
 * **TRK 2:** optional second Mabee with its A0 link cut (0x58).
 * **MERGE T2>T1:** both tracks share 0x59, with TRK 1 taking priority.
 * **MIDI:**

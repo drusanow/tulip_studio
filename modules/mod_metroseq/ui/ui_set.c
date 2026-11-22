@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "engine/seq_clock.h"
+#include "platform/cv_dac.h"
 #include "platform/preview_audio.h"
 #include "platform/storage.h"
 #include "sdkconfig.h"
@@ -24,7 +25,7 @@
 static struct {
     lv_obj_t *panel;
     lv_obj_t *root_lbl, *scale_lbl, *boct_lbl, *range_lbl, *notes_lbl;
-    ui_btn_t *cv_btn, *merge_btn, *clock_btn, *clkout_btn, *audio_btn, *switch_btn;
+    ui_btn_t *cv_btn, *merge_btn, *clock_btn, *clkout_btn, *audio_btn, *switch_btn, *range_btn;
     lv_obj_t *cv_status;
     lv_obj_t *info, *proj_lbl;
     lv_obj_t *timing_lbl;
@@ -101,6 +102,16 @@ static void quant_step(intptr_t arg) {
 
 static void cv_toggle(intptr_t a) { seq_cmd(CMD_CV_TOGGLE); }
 static void cv_rescan(intptr_t a) { seq_cmd(CMD_CV_RESCAN); }
+
+// 0-10 V for eurorack; 0-5 V for +-5 V inputs (AMYboard sketches): above
+// 5 V a note drops by octaves instead of clipping
+static void toggle_range(intptr_t a) {
+    bool five = !storage_cv_5v();
+    storage_set_cv_5v(five);
+    cv_dac_set_pitch_max(five ? 5.0f : CV_MAX_V);
+    set_page_refresh();
+    ui_header_info(five ? "pitch 0-5 V (AMYboard)" : "pitch 0-10 V");
+}
 
 static void toggle_merge(intptr_t a) {
     g_pat.merge_cv = !g_pat.merge_cv;
@@ -224,6 +235,7 @@ void set_page_refresh(void) {
     refresh_quant();
     ui_btn_set_text(S.merge_btn, g_pat.merge_cv ? "TRK2 > TRK1" : "SPLIT");
     ui_btn_set_color(S.merge_btn, g_pat.merge_cv ? C_PLAY : C_BTN_DK);
+    ui_btn_set_text(S.range_btn, storage_cv_5v() ? "0-5 V" : "0-10 V");
     bool midi = studio_clock_src() == CLOCK_SRC_MIDI;
     ui_btn_set_text(S.clock_btn, midi ? "MIDI" : "INTERNAL");
     ui_btn_set_color(S.clock_btn, midi ? C_PLAY : C_BTN_DK);
@@ -270,7 +282,7 @@ void set_page_create(lv_obj_t *parent) {
     button(p, 1, 1, "DACs", "RESCAN", cv_rescan);
     S.merge_btn = button(p, 1, 2, "CV routing", "SPLIT", toggle_merge);
     S.cv_status = readout(p, 1, 3, "Status");
-    hint(p, "TRK 1 0x59, TRK 2 0x58\nVOUT0 gate, VOUT1 pitch 1 V/oct", COL_X(1), ROW_Y(4) + 4);
+    S.range_btn = button(p, 1, 4, "Pitch range", "0-10 V", toggle_range);
 
     // column 3: the rest of the setup
     ui_section(p, "SETUP", COL_X(2), 12);

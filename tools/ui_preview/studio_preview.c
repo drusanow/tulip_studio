@@ -64,6 +64,10 @@ const char *pat_swap_at_name(int v) {
     return v >= 0 && v < 4 ? N[v] : "?";
 }
 const char *pat_swap_when(void) { return "next bar"; }
+static bool s_cv5;
+bool storage_cv_5v(void) { return s_cv5; }
+void storage_set_cv_5v(bool on) { s_cv5 = on; }
+void cv_dac_set_pitch_max(float v) {}
 uint32_t pat_snapshot(pattern_t *d) {
     *d = g_pat;
     return s_swaps;
