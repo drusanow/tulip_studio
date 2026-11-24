@@ -132,7 +132,30 @@ third_party/gamma9001/ the drum samples, from AMY (MIT)
 ## Flash it
 
 **First time:** flash the full image over USB. It holds the launcher and Tulip Studio
-(every app, preloaded), plus Drumster9's samples:
+(every app, preloaded), plus Drumster9's samples.
+
+### From a web browser (no install)
+
+1. Download `tulip-full.bin` from the latest
+   [release](https://github.com/drusanow/tulip_studio/releases/latest).
+2. Open Espressif's web flasher, **https://espressif.github.io/esptool-js/**, in
+   **Chrome or Edge** on a computer. Firefox and Safari can't talk to USB serial ports.
+3. Plug the Tulip into the computer with the **top USB port** (the UART one). If it
+   doesn't show up in step 4, hold **BOOT**, tap **RESET**, then let go of **BOOT**.
+4. Under **Program**:
+   * set **Baudrate** to `921600` (use `460800` if it fails);
+   * click **Connect**, and pick the Tulip's port in the browser's list (often
+     "USB JTAG/serial debug unit", "CP210x" or "USB Single Serial").
+
+   The page should then show `Chip is ESP32-S3`.
+5. Set **Flash Address** to `0x0`, choose `tulip-full.bin` as the file, and click
+   **Program**. It takes about 3 minutes for the 16 MB image.
+   * **Don't** click **Erase Flash** first: it would wipe `/files`, and the full
+     image doesn't need it.
+6. When it says it's done, press **RESET** on the Tulip, or unplug it and plug it back
+   in. The launcher starts, sets up `/files` on its first start, and shows the apps.
+
+### From a terminal
 
 ```sh
 pip install esptool
@@ -147,7 +170,9 @@ copies in `/files/apps` are hidden from the start page; delete them in FILES if 
 like.) To go back, flash a [Tulip release](https://github.com/shorepine/tulipcc/releases)
 the same way.
 
-**After that:** put apps on over Wi-Fi from the launcher's WI-FI page. See
+**After that:** you don't need to flash again. To update, download `studio.bin` from a
+newer release and put it on over Wi-Fi from the launcher's WI-FI page (or with
+`tools/tulip.py push studio.bin --launch`). See
 [docs/LAUNCHER.md](docs/LAUNCHER.md). To use your GinTonix banks and kits, copy your
 Tulip's `/user/gintonix` folder to `/files/gintonix`.
 
