@@ -236,10 +236,12 @@ static void execute(const seq_actions_t *acts) {
 #if CONFIG_METRO_TIMING_PROBE_GPIO >= 0
             if (a->out == 0) gpio_set_level(CONFIG_METRO_TIMING_PROBE_GPIO, a->value);
 #endif
-            if (cv_dac_present(a->out)) ok = cv_dac_gate(a->out, a->value);
+            // (the DACs may be another sequencer's: the first one switched on keeps them)
+            if (cv_dac_present(a->out) && studio_cv_mine(&mod_metroseq)) ok = cv_dac_gate(a->out, a->value);
             break;
         case ACT_PITCH:
-            if (cv_dac_present(a->out)) ok = cv_dac_pitch_cents(a->out, a->value);
+            if (cv_dac_present(a->out) && studio_cv_mine(&mod_metroseq))
+                ok = cv_dac_pitch_cents(a->out, a->value);
             break;
         case ACT_AUDIO_ON:
             note_out(a->out, TN_ON, a->value, a->arg, a->due_us);
@@ -306,7 +308,7 @@ static void ramp_step(void) {
     int i = s_ramp_i;
     float frac = (float)(i <= CV_RAMP_STEPS ? i : 2 * CV_RAMP_STEPS - i) / CV_RAMP_STEPS;
     for (int t = 0; t < CV_NUM_DACS; t++)
-        if (cv_dac_present(t)) cv_dac_gate_volts(t, CV_HIGH_V * frac);
+        if (cv_dac_present(t) && studio_cv_mine(&mod_metroseq)) cv_dac_gate_volts(t, CV_HIGH_V * frac);
     s_ramp_i++;
     s_ramp_next += CV_RAMP_STEP_US;
 }

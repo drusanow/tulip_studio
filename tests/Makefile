@@ -16,7 +16,7 @@ SRC = $(ENGINE)/seq_engine.c $(ENGINE)/seq_model.c $(ENGINE)/seq_clock.c $(HAL)/
       $(STUDIO)/src/tclock.c $(STUDIO)/src/midi_parse.c
 HDR = $(wildcard $(ENGINE)/*.h)
 
-all: build/test_engine build/test_midi_touch build/test_launcher build/test_studio build/test_gx build/gx_tool build/test_sloe build/test_wavetron build/test_d9 build/gamma9001.bin build/sim
+all: build/test_engine build/test_midi_touch build/test_launcher build/test_studio build/test_gx build/gx_tool build/test_sloe build/test_wavetron build/test_d9 build/test_s101 build/gamma9001.bin build/sim
 
 build/test_engine: test_engine.c $(SRC) $(HDR) $(ENGINE)/seq_json.c
 	@mkdir -p build
@@ -41,6 +41,11 @@ build/test_gx: test_gx.c $(GX_SRC) $(wildcard $(GX)/*.h)
 build/gx_tool: gx_tool.c $(GX_SRC) $(wildcard $(GX)/*.h)
 	@mkdir -p build
 	$(CC) $(CFLAGS) -I$(GX) -I$(CJSON) -o $@ gx_tool.c $(GX_SRC) -lm
+
+S1 = ../modules/mod_seq101/core
+build/test_s101: test_s101.c $(S1)/s1_model.c $(S1)/s1_seq.c $(wildcard $(S1)/*.h)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -I$(S1) -I$(CJSON) -o $@ test_s101.c $(S1)/s1_model.c $(S1)/s1_seq.c $(CJSON)/cJSON.c
 
 build/test_sloe: test_sloe.c ../modules/mod_sloe/sloe_dsp.c ../modules/mod_sloe/sloe_dsp.h
 	@mkdir -p build
@@ -76,6 +81,7 @@ test: all
 	./build/test_sloe
 	./build/test_wavetron
 	./build/test_d9 build/gamma9001.bin
+	./build/test_s101
 	python3 gx_parity.py
 	python3 py_parity.py
 

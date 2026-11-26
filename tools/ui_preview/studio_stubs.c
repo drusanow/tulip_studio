@@ -101,6 +101,10 @@ void studio_set_cv_clock(bool on, int div, int v1) {
     if (v1 >= 0) g_cfg.cv_vout1 = (uint8_t)v1;
 }
 bool studio_cv_clock(void) { return g_cfg.cv_clock; }
+bool studio_cv_mine(const tmod_t *m) { return true; }
+const tmod_t *studio_cv_owner(void) { return NULL; }
+bool studio_cv_write(const tmod_t *m, int dac, int ch, float v) { return true; }
+bool studio_cv_present(int dac) { return dac == 0; }
 int studio_cv_clock_div(void) { return g_cfg.cv_div; }
 int studio_cv_clock_vout1(void) { return g_cfg.cv_vout1; }
 int studio_cv_clock_state(void) { return g_cfg.cv_clock ? CVCLK_SEQUENCER : CVCLK_OFF; }

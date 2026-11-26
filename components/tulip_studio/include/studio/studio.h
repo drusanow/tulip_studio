@@ -221,6 +221,15 @@ int studio_cv_clock_div(void);
 int studio_cv_clock_vout1(void);
 int studio_cv_clock_state(void);   // CVCLK_*, what it's doing now
 
+// The Mabee DACs for gate + pitch (TMOD_F_CV apps). One app has them at a
+// time: the first TMOD_F_CV app switched on (on its own, that app). DAC 0 is
+// at 0x59, DAC 1 at 0x58; on each, ch 0 = VOUT0 (gate), ch 1 = VOUT1 (pitch).
+bool studio_cv_mine(const tmod_t *m);                  // any task
+const tmod_t *studio_cv_owner(void);                   // NULL: nobody
+// rt task only. 0..10 V; false if that DAC isn't there (or not m's to drive).
+bool studio_cv_write(const tmod_t *m, int dac, int ch, float volts);
+bool studio_cv_present(int dac);                       // answered last time
+
 void studio_set_bpm_x100(int32_t bpm_x100);
 int32_t studio_bpm_x100(void);    // the set tempo
 

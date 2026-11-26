@@ -542,7 +542,7 @@ static void home_create(void) {
     H.nrows = 0;
     for (int i = 0; i < g_nmods; i++) {
         const tmod_t *m = g_mods[i];
-        for (int k = 0; k < m->n_note_outs && k < 2 && H.nrows < MAX_ROWS; k++) {
+        for (int k = 0; k < m->n_note_outs && k < STUDIO_MAX_OUTS && H.nrows < MAX_ROWS; k++) {
             int r = H.nrows++;
             H.row[r].mod = i;
             H.row[r].track = k;

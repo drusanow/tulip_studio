@@ -5,7 +5,7 @@ with no MicroPython or AMY.
 
 **One set of apps, two ways to run them.** The start page has two sections:
 
-* **The apps, each on its own:** metroseq (sequencer), GinTonix and Drumster9 (drum
+* **The apps, each on its own:** metroseq and SEQ101 (sequencers), GinTonix and Drumster9 (drum
   machines), Sloe and Wavetron (synths).
 * **STUDIO:** the same apps together on one clock. Every app starts off; you switch on
   the ones you want.
@@ -82,6 +82,9 @@ tried on a Tulip).
   * A-J patterns that switch on the downbeat, 4 FX buses (reverb, echo, filter, drive,
     EQ), a mixer, and the CV clock.
   * The sketch's project file loads as it is.
+* **[SEQ101](docs/SEQ101.md)**: a 4-lane, 16-step note sequencer. Chords, note lengths
+  from 1/16 to a bar, an arpeggiator per lane, lane lengths of their own, 12 patterns a
+  lane with chains, and each lane to MIDI OUT, CV A / B or a synth on the Tulip.
 * **[`docs/templates/mod_example`](docs/templates/mod_example)**: the smallest complete
   app, as a template.
 

@@ -341,6 +341,60 @@ static void cvclk_advance(int64_t now) {
     cv_level(1, g_cfg.cv_vout1 == CV_V1_RUN ? true : step == 0);
 }
 
+// --- the DACs for sequencer apps (studio_cv_*) ---------------------------------------------
+
+static int8_t s_cv_owner = -1;   // the first TMOD_F_CV app switched on
+static i2c_master_dev_handle_t s_dac[2];
+static bool s_dac_tried[2], s_dac_ok[2];
+static uint8_t s_dac_fails[2];
+
+static int cv_owner_index(void) {
+    if (s_cv_owner >= 0 && s_cv_owner < g_nmods && g_enabled[s_cv_owner]) return s_cv_owner;
+    for (int i = 0; i < g_nmods; i++)
+        if (g_enabled[i] && (g_mods[i]->flags & TMOD_F_CV)) return i;
+    return -1;
+}
+
+bool studio_cv_mine(const tmod_t *m) {
+    int i = cv_owner_index();
+    return i >= 0 && g_mods[i] == m;
+}
+
+const tmod_t *studio_cv_owner(void) {
+    int i = cv_owner_index();
+    return i >= 0 ? g_mods[i] : NULL;
+}
+
+bool studio_cv_present(int dac) { return dac >= 0 && dac < 2 && s_dac_ok[dac]; }
+
+static bool dac_up(int dac) {
+    if (s_dac_tried[dac]) return s_dac_ok[dac];
+    s_dac_tried[dac] = true;
+    i2c_device_config_t cfg = {.dev_addr_length = I2C_ADDR_BIT_LEN_7,
+                               .device_address = dac ? 0x58 : 0x59, .scl_speed_hz = CV_HZ};
+    if (!s_dac[dac] && i2c_master_bus_add_device(s_bus, &cfg, &s_dac[dac]) != ESP_OK) return false;
+    uint8_t range[2] = {0x01, 0x11};   // 0-10 V
+    s_dac_ok[dac] = i2c_master_transmit(s_dac[dac], range, 2, 5) == ESP_OK;
+    ESP_LOGI(TAG, "CV DAC at 0x%02x %s", dac ? 0x58 : 0x59, s_dac_ok[dac] ? "found" : "not found");
+    return s_dac_ok[dac];
+}
+
+bool studio_cv_write(const tmod_t *m, int dac, int ch, float volts) {
+    if (dac < 0 || dac > 1 || !studio_cv_mine(m) || !dac_up(dac)) return false;
+    float x = volts / 10.0f * 65535.0f + 0.5f;
+    uint16_t code = x < 0 ? 0 : x > 65535.0f ? 65535 : (uint16_t)x;
+    uint8_t b[3] = {(uint8_t)(ch ? 0x04 : 0x02), (uint8_t)(code & 0xff), (uint8_t)(code >> 8)};
+    if (i2c_master_transmit(s_dac[dac], b, 3, 5) == ESP_OK) {
+        s_dac_fails[dac] = 0;
+        return true;
+    }
+    if (++s_dac_fails[dac] >= 5) {   // gone: try it again in a while (on the next RESCAN)
+        s_dac_ok[dac] = false;
+        ESP_LOGW(TAG, "CV DAC at 0x%02x stopped answering", dac ? 0x58 : 0x59);
+    }
+    return false;
+}
+
 int studio_cv_clock_state(void) {
     if (s_cv_state == CVCLK_ON && s_cv_probed && !s_cv) return CVCLK_NO_DAC;
     return s_cv_state;
@@ -389,7 +443,13 @@ static void handle_cmd(const rt_msg_t *m, int64_t now) {
         bool on = m->arg != 0;
         if (on) start_module(i);   // (already, unless HC_START was lost)
         if (g_enabled[i] == on) break;
+        // the DACs: the first TMOD_F_CV app switched on keeps them
+        if (on && (g_mods[i]->flags & TMOD_F_CV) && cv_owner_index() < 0) s_cv_owner = (int8_t)i;
         g_enabled[i] = on;
+        if (!on && s_cv_owner == i) {   // the owner off: the next CV app on takes them
+            s_cv_owner = -1;
+            s_cv_owner = (int8_t)cv_owner_index();
+        }
         if (g_mods[i]->rt_enable) g_mods[i]->rt_enable(on, now);
         break;
     }
