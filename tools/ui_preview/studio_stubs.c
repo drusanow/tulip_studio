@@ -140,7 +140,8 @@ void studio_mix_set_level(int m, int p) { s_lv[m] = (uint8_t)p; }
 int studio_mix_level(int m) { return s_lv[m]; }
 void studio_mix_set_mute(int m, bool on) { s_mute = on ? s_mute | (1u << m) : s_mute & ~(1u << m); }
 bool studio_mix_muted(int m) { return s_mute & (1u << m); }
-float studio_mix_peak(int m) { return m == 1 ? 0.5f : (m == 0 ? 0.05f : 0); }
+float studio_mix_peak(int m) { return m == 1 ? 0.9f : (m == 0 ? 0.3f : 0); }
+float studio_mix_rms(int m) { return m == 1 ? 0.12f : (m == 0 ? 0.2f : 0); }
 
 // --- Drumster9's hardware: the samples partition is the image the tests pack -----------------
 #include <stdio.h>

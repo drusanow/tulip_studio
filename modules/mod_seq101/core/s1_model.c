@@ -13,6 +13,38 @@ static const int8_t CHORDS[CH_COUNT][S1_MAX_NOTES] = {
     {0, 4, 7, 10},   {0, 4, 7, 11}, {0, 3, 7, 10}, {0, 7, -1, -1}, {0, 12, -1, -1},
 };
 
+const char *const S1_SCALE_NAMES[SC_COUNT] = {"CHROMATIC", "MAJOR",      "MINOR",     "DORIAN",
+                                              "PHRYGIAN",  "LYDIAN",     "MIXOLYDIAN", "HARM MINOR",
+                                              "PENTA MAJ", "PENTA MIN",  "BLUES"};
+const char *const S1_ROOT_NAMES[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+// bit k: semitone k above the root is in the scale
+static const uint16_t SCALES[SC_COUNT] = {
+    0xfff,                                             // chromatic
+    1 | 1 << 2 | 1 << 4 | 1 << 5 | 1 << 7 | 1 << 9 | 1 << 11,   // major
+    1 | 1 << 2 | 1 << 3 | 1 << 5 | 1 << 7 | 1 << 8 | 1 << 10,   // natural minor
+    1 | 1 << 2 | 1 << 3 | 1 << 5 | 1 << 7 | 1 << 9 | 1 << 10,   // dorian
+    1 | 1 << 1 | 1 << 3 | 1 << 5 | 1 << 7 | 1 << 8 | 1 << 10,   // phrygian
+    1 | 1 << 2 | 1 << 4 | 1 << 6 | 1 << 7 | 1 << 9 | 1 << 11,   // lydian
+    1 | 1 << 2 | 1 << 4 | 1 << 5 | 1 << 7 | 1 << 9 | 1 << 10,   // mixolydian
+    1 | 1 << 2 | 1 << 3 | 1 << 5 | 1 << 7 | 1 << 8 | 1 << 11,   // harmonic minor
+    1 | 1 << 2 | 1 << 4 | 1 << 7 | 1 << 9,                      // major pentatonic
+    1 | 1 << 3 | 1 << 5 | 1 << 7 | 1 << 10,                     // minor pentatonic
+    1 | 1 << 3 | 1 << 5 | 1 << 6 | 1 << 7 | 1 << 10,            // blues
+};
+
+bool s1_in_scale(int note, int root, int scale) {
+    if (scale < 0 || scale >= SC_COUNT) return true;
+    return SCALES[scale] >> (((note - root) % 12 + 12) % 12) & 1;
+}
+
+int s1_quantise(int note, int root, int scale) {
+    for (int d = 0; d < 12; d++) {
+        if (note - d >= 0 && s1_in_scale(note - d, root, scale)) return note - d;
+        if (note + d <= 127 && s1_in_scale(note + d, root, scale)) return note + d;
+    }
+    return note;
+}
+
 const char *const S1_ARP_NAMES[ARP_MODES] = {"UP", "DOWN", "UP/DN", "RAND", "ORDER"};
 const char *const S1_RATE_NAMES[ARP_RATES] = {"1/32", "1/16", "1/8", "1/4"};
 
@@ -84,6 +116,8 @@ void s1_sanitise(s1_state_t *s) {
             }
     }
     s->cv_5v = s->cv_5v != 0;
+    s->scale_root = (uint8_t)clampi(s->scale_root, 0, 11);
+    s->scale = (uint8_t)clampi(s->scale, 0, SC_COUNT - 1);
 }
 
 int s1_chord_notes(const s1_step_t *st, uint8_t out[S1_MAX_NOTES]) {
@@ -135,6 +169,8 @@ cJSON *s1_to_json(const s1_state_t *s) {
     cJSON *o = cJSON_CreateObject();
     cJSON_AddNumberToObject(o, "seq101", 1);
     cJSON_AddBoolToObject(o, "cv_5v", s->cv_5v);
+    cJSON_AddNumberToObject(o, "scale_root", s->scale_root);
+    cJSON_AddNumberToObject(o, "scale", s->scale);
     cJSON *lanes = cJSON_AddArrayToObject(o, "lanes");
     for (int l = 0; l < S1_LANES; l++) {
         const s1_lane_t *ln = &s->lane[l];
@@ -175,6 +211,8 @@ cJSON *s1_to_json(const s1_state_t *s) {
 void s1_from_json(const cJSON *o, s1_state_t *s) {
     const cJSON *v = cJSON_GetObjectItemCaseSensitive(o, "cv_5v");
     if (cJSON_IsBool(v)) s->cv_5v = cJSON_IsTrue(v);
+    s->scale_root = (uint8_t)num(o, "scale_root", s->scale_root);
+    s->scale = (uint8_t)num(o, "scale", s->scale);
     const cJSON *lanes = cJSON_GetObjectItemCaseSensitive(o, "lanes");
     for (int l = 0; l < S1_LANES && cJSON_IsArray(lanes); l++) {
         const cJSON *j = cJSON_GetArrayItem(lanes, l);

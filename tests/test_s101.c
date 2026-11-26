@@ -183,6 +183,23 @@ static void test_edit_helpers_and_json(void) {
     printf("seq101: held-note owner, length fitting, JSON round trip\n");
 }
 
+static void test_scale(void) {
+    CHECK(s1_quantise(61, 0, SC_MAJOR) == 60 && s1_quantise(66, 0, SC_MAJOR) == 65 &&
+              s1_quantise(63, 0, SC_MINOR) == 63 && s1_quantise(64, 0, SC_MINOR) == 63,
+          "C major / minor snaps");
+    CHECK(s1_quantise(61, 2, SC_PENTA_MIN) == 60 && s1_quantise(63, 2, SC_PENTA_MIN) == 62 && s1_in_scale(69, 9, SC_PENTA_MIN), "D / A pentatonic");
+    fresh();
+    S.scale = SC_MAJOR;   // C major: C# plays as C, and a C#-based chord loses its repeat
+    s1_step_default(&S.pat[0][0].st[0], 61);
+    S.pat[0][0].st[0].chord = CH_MAJ;   // C# F G# -> C F G
+    s1_seq_start(&Q, &S, 0);
+    log_t lg;
+    run(0, 0, 2, &lg);
+    CHECK(lg.n == 3 && lg.note[0] == 60 && lg.note[1] == 65 && lg.note[2] == 67, "quantised chord: %d %d %d %d", lg.n,
+          lg.note[0], lg.note[1], lg.note[2]);
+    printf("seq101: scales quantise as they play (nearest, down on a tie)\n");
+}
+
 int main(void) {
     test_notes_and_lengths();
     test_chord_and_lane_length();
@@ -190,6 +207,7 @@ int main(void) {
     test_queue_and_chain();
     test_start_mid_bar_and_mute();
     test_edit_helpers_and_json();
+    test_scale();
     printf(failures ? "\n%d FAILURES\n" : "\nall seq101 tests passed\n", failures);
     return failures ? 1 : 0;
 }

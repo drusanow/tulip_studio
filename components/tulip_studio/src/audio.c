@@ -39,6 +39,9 @@ static float s_l[B], s_r[B];
 static float s_ml[B], s_mr[B];   // one module's block, before its fader
 static volatile float s_mgain[STUDIO_MAX_MODULES];
 static volatile float s_peak[STUDIO_MAX_MODULES];
+// loudness: the sum of squares since the UI last asked, and its frames
+static volatile float s_sq[STUDIO_MAX_MODULES];
+static volatile uint32_t s_sqn[STUDIO_MAX_MODULES];
 static int16_t s_out[B * 2];
 static volatile int s_load_pct;
 static volatile uint32_t s_underruns;
@@ -105,6 +108,14 @@ float studio_mix_peak(int m) {
     s_peak[m] = 0;   // (a race with the audio task only loses one block's peak)
     return p;
 }
+float studio_mix_rms(int m) {
+    if (m < 0 || m >= STUDIO_MAX_MODULES || !s_sqn[m]) return 0;
+    float r = sqrtf(s_sq[m] / (float)s_sqn[m]);
+    s_sq[m] = 0;   // (a race with the audio task only loses one block)
+    s_sqn[m] = 0;
+    return r;
+}
+
 int studio_audio_load_pct(void) { return s_load_pct; }
 uint32_t studio_audio_underruns(void) { return s_underruns; }
 
@@ -168,15 +179,18 @@ static void audio_task(void *arg) {
             memset(s_ml, 0, sizeof s_ml);
             memset(s_mr, 0, sizeof s_mr);
             m->render(s_ml, s_mr, &blk);
-            float mg = s_mgain[i], pk = s_peak[i];
+            float mg = s_mgain[i], pk = s_peak[i], sq = 0;
             for (int k = 0; k < B; k++) {
                 float a = s_ml[k] * mg, b = s_mr[k] * mg;
                 s_l[k] += a;
                 s_r[k] += b;
                 float x = fabsf(a) > fabsf(b) ? fabsf(a) : fabsf(b);
                 if (x > pk) pk = x;
+                sq += 0.5f * (a * a + b * b);
             }
             s_peak[i] = pk;
+            s_sq[i] += sq;
+            s_sqn[i] += B;
         }
         float g = s_gain;
         for (int i = 0; i < B; i++) {

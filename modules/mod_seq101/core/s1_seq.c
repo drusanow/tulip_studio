@@ -103,6 +103,14 @@ int s1_seq_tick(s1_seq_t *q, s1_state_t *s, uint32_t t, s1_ev_t *out, int max) {
             const s1_step_t *st = &s->pat[l][ln->slot].st[r->step];
             uint8_t notes[S1_MAX_NOTES];
             int nn = ln->mute ? 0 : s1_chord_notes(st, notes);
+            if (s->scale != SC_CHROMATIC) {   // the scale: each note to its nearest, no repeats
+                int k = 0;
+                for (int i = 0; i < nn; i++) {
+                    uint8_t q = (uint8_t)s1_quantise(notes[i], s->scale_root, s->scale);
+                    if (!k || notes[k - 1] != q) notes[k++] = q;
+                }
+                nn = k;
+            }
             if (nn) {
                 // don't run past the lane's end
                 int steps = st->len;

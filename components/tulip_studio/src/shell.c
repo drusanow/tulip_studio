@@ -191,6 +191,8 @@ static struct {
     sw_slider_t *fader[STUDIO_MAX_MODULES];
     lv_obj_t *strip[STUDIO_MAX_MODULES];   // the mixer strip: hidden while the app is off
     int meter_px[STUDIO_MAX_MODULES];
+    lv_obj_t *pmark[STUDIO_MAX_MODULES];   // the peak, a tick over the bar
+    int pmark_px[STUDIO_MAX_MODULES];
     int play_shown, bpm_shown;
     uint32_t mon_seq;
     // patches
@@ -240,25 +242,41 @@ static void mixer_strip(lv_obj_t *t, int i, int y) {
     sw_box(t, 54, y + 47, w, 4, 0x242424, 0);
     H.meter[i] = sw_box(t, 54, y + 47, 1, 4, SW_GREEN, 0);
     H.meter_px[i] = -1;
+    H.pmark[i] = sw_box(t, 54, y + 44, 2, 8, SW_TEXT, 0);
+    H.pmark_px[i] = -1;
 }
 
-// peak meters, ~15 Hz: a quick rise, a slow fall
+// -48 .. 0 dB across the bar
+static int meter_px(float v) {
+    float db = v > 1e-5f ? 20.0f * log10f(v) : -96.0f;
+    float f = (db + 48.0f) / 48.0f;
+    f = f < 0 ? 0 : (f > 1 ? 1 : f);
+    int px = (int)(f * s_meter_w);
+    return px < 1 ? 1 : px;
+}
+
+// The meters, ~15 Hz. The bar is loudness (RMS, ~300 ms), so apps compare
+// the way they sound; the white tick is the peak, held and falling. Red
+// only when the peak is at full scale.
 static void mixer_poll(void) {
-    static float hold[STUDIO_MAX_MODULES];
+    static float pow_[STUDIO_MAX_MODULES], hold[STUDIO_MAX_MODULES];
     for (int i = 0; i < g_nmods; i++) {
         if (!H.meter[i]) continue;
-        float p = studio_mix_peak(i);
-        hold[i] = p > hold[i] ? p : hold[i] * 0.8f;
-        // -48 .. 0 dB across the bar
-        float db = hold[i] > 1e-5f ? 20.0f * log10f(hold[i]) : -96.0f;
-        float f = (db + 48.0f) / 48.0f;
-        f = f < 0 ? 0 : (f > 1 ? 1 : f);
-        int px = (int)(f * s_meter_w);
-        if (px < 1) px = 1;
-        if (px == H.meter_px[i]) continue;
-        H.meter_px[i] = px;
-        lv_obj_set_width(H.meter[i], px);
-        lv_obj_set_style_bg_color(H.meter[i], sw_c(db > -1.0f ? SW_RED : db > -9.0f ? SW_YELLOW : SW_GREEN), 0);
+        float r = studio_mix_rms(i), p = studio_mix_peak(i);
+        pow_[i] = pow_[i] * 0.75f + r * r * 0.25f;
+        hold[i] = p > hold[i] ? p : hold[i] * 0.85f;
+        float rms = sqrtf(pow_[i]);
+        int px = meter_px(rms), pk = meter_px(hold[i]);
+        if (px != H.meter_px[i]) {
+            H.meter_px[i] = px;
+            lv_obj_set_width(H.meter[i], px);
+            lv_obj_set_style_bg_color(H.meter[i], sw_c(rms > 0.25f ? SW_YELLOW : SW_GREEN), 0);
+        }
+        if (pk != H.pmark_px[i]) {
+            H.pmark_px[i] = pk;
+            lv_obj_set_x(H.pmark[i], 54 + pk - 2);
+            lv_obj_set_style_bg_color(H.pmark[i], sw_c(hold[i] > 0.94f ? SW_RED : SW_TEXT), 0);
+        }
     }
 }
 static void h_rst(void *ud) { studio_restart(); }

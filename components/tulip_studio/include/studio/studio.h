@@ -289,6 +289,10 @@ int studio_mix_level(int mod);
 void studio_mix_set_mute(int mod, bool on);
 bool studio_mix_muted(int mod);
 float studio_mix_peak(int mod);
+// The channel's loudness (RMS) since the last call, 0..1: what the ear goes
+// by. Drum samples peak near full scale but sit ~16 dB lower on average;
+// a held synth sits only a few dB under its peak.
+float studio_mix_rms(int mod);
 
 // --- UI -------------------------------------------------------------------------------------
 

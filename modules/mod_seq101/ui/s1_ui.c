@@ -28,9 +28,16 @@ static const uint32_t LANE_C[S1_LANES] = {SW_ORANGE, SW_YELLOW, 0xff4848, SW_CYA
 #define CELL_X0 66
 #define CELL_P 53       // pitch
 #define CELL_W 50
-#define ROW_Y0 70
-#define ROW_P 104
-#define ROW_H 98
+#define ROW_Y0 68
+#define ROW_P 70
+#define ROW_H 66
+// the keyboard under the lanes: 3 octaves of keys
+#define KB_Y 392
+#define KB_H 138
+#define KB_X0 50
+#define KB_WW 44        // a white key's pitch
+#define KB_OCTS 3
+#define KB_WHITES (7 * KB_OCTS)
 
 enum { PG_STEPS, PG_PATS, PG_SET, PG_COUNT };
 
@@ -52,6 +59,8 @@ static struct {
     int sel_lane, sel_step;     // the picked note (step -1: none)
     int last_note[S1_LANES];    // what a new note starts as
     int head[S1_LANES];         // playhead shown (owner cell)
+    lv_obj_t *key[KB_OCTS * 12], *key_dot[KB_OCTS * 12], *key_lbl[KB_OCTS * 12], *kb_oct;
+    int kb_base;                // the keyboard's lowest C
     // PATTERNS
     lv_obj_t *slot[S1_LANES][S1_SLOTS], *slot_sub[S1_LANES][S1_SLOTS], *p_lane[S1_LANES], *p_info[S1_LANES];
     lv_obj_t *p_sel;
@@ -61,10 +70,10 @@ static struct {
     int q_shown[S1_LANES], slot_shown[S1_LANES];
     bool blink;
     // SET
-    lv_obj_t *s_range, *s_cv;
+    lv_obj_t *s_range, *s_cv, *s_root, *s_scale;
     volatile bool reload;
 } U = {.page = -1, .play_shown = -1, .bpm_shown = -1, .sel_step = -1, .psel_slot = 0,
-       .last_note = {48, 60, 64, 72}, .head = {-1, -1, -1, -1}};
+       .last_note = {48, 60, 64, 72}, .head = {-1, -1, -1, -1}, .kb_base = 48};
 
 static uint32_t now_ms(void) { return (uint32_t)(studio_now_us() / 1000); }
 
@@ -131,9 +140,86 @@ static void paint_lane(int l) {
     sw_btn_set(U.arp_b[l], ln->arp);
     sw_btn_text(U.arp_b[l], ln->arp ? "ARP ON" : "ARP OFF");
     sw_btn_text(U.mode_b[l], S1_ARP_NAMES[ln->arp_mode]);
+    sw_btn_text(U.rate_b[l], S1_RATE_NAMES[ln->arp_rate]);
+}
+
+static void paint_editor(void);
+
+// --- the keyboard ---------------------------------------------------------------------------
+
+static bool is_black(int pc) { return pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10; }
+
+static void paint_keys(void) {
+    const s1_step_t *st = U.sel_step >= 0 ? &cur_pat(U.sel_lane)->st[U.sel_step] : NULL;
+    int cur = st && st->on ? st->note : U.last_note[U.sel_lane];
+    bool scaled = g_s1.scale != SC_CHROMATIC;
+    for (int k = 0; k < KB_OCTS * 12; k++) {
+        int note = U.kb_base + k, pc = k % 12;
+        bool in = s1_in_scale(note, g_s1.scale_root, g_s1.scale);
+        uint32_t bg = note == cur ? ACC : is_black(pc) ? 0x202020 : (scaled && !in ? 0x9a9a9a : 0xf2f2f2);
+        lv_obj_set_style_bg_color(U.key[k], sw_c(bg), 0);
+        if (scaled && in)
+            lv_obj_remove_flag(U.key_dot[k], LV_OBJ_FLAG_HIDDEN);
+        else
+            lv_obj_add_flag(U.key_dot[k], LV_OBJ_FLAG_HIDDEN);
+        if (U.key_lbl[k]) {
+            char t[8];
+            s1_note_name(note, t, sizeof t);
+            lv_label_set_text(U.key_lbl[k], t);
+        }
+    }
     char t[24];
-    snprintf(t, sizeof t, "RATE %s", S1_RATE_NAMES[ln->arp_rate]);
-    sw_btn_text(U.rate_b[l], t);
+    char a[8], b[8];
+    s1_note_name(U.kb_base, a, sizeof a);
+    s1_note_name(U.kb_base + KB_OCTS * 12 - 1, b, sizeof b);
+    snprintf(t, sizeof t, "%s-%s", a, b);
+    lv_label_set_text(U.kb_oct, t);
+}
+
+static void key_event(lv_event_t *e) {
+    int note = U.kb_base + (int)(intptr_t)lv_event_get_user_data(e);
+    U.last_note[U.sel_lane] = note;
+    if (U.sel_step >= 0 && cur_pat(U.sel_lane)->st[U.sel_step].on) {
+        cur_pat(U.sel_lane)->st[U.sel_step].note = (uint8_t)note;
+        paint_lane(U.sel_lane);
+        s1_changed();
+    } else {
+        char t[40], nm[8];
+        s1_note_name(note, nm, sizeof nm);
+        snprintf(t, sizeof t, "new notes on lane %c: %s", 'A' + U.sel_lane, nm);
+        say(t);
+    }
+    paint_keys();
+    paint_editor();
+}
+
+static void kb_oct_cb(void *ud) {
+    int b = U.kb_base + 12 * (int)(intptr_t)ud;
+    if (b < 0 || b + KB_OCTS * 12 > 128) return;
+    U.kb_base = b;
+    paint_keys();
+}
+
+static void keyboard_create(lv_obj_t *p) {
+    sw_btn(p, "<", 6, KB_Y, 40, KB_H, ACC, kb_oct_cb, (void *)-1, SW_F_MID);
+    sw_btn(p, ">", KB_X0 + KB_WHITES * KB_WW + 4, KB_Y, 40, KB_H, ACC, kb_oct_cb, (void *)1, SW_F_MID);
+    // white keys first, the black ones on top
+    for (int pass = 0; pass < 2; pass++)
+        for (int k = 0, w = 0; k < KB_OCTS * 12; k++) {
+            bool black = is_black(k % 12);
+            if (!black) w++;
+            if (black != (pass == 1)) continue;
+            int x = black ? KB_X0 + w * KB_WW - 14 : KB_X0 + (w - 1) * KB_WW;
+            int kw = black ? 28 : KB_WW - 2, kh = black ? KB_H * 6 / 10 : KB_H;
+            lv_obj_t *b = U.key[k] = sw_box(p, x, KB_Y, kw, kh, 0xf2f2f2, 3);
+            lv_obj_set_style_border_width(b, 1, 0);
+            lv_obj_set_style_border_color(b, sw_c(0x303030), 0);
+            lv_obj_add_flag(b, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_add_event_cb(b, key_event, LV_EVENT_PRESSED, (void *)(intptr_t)k);
+            U.key_dot[k] = sw_box(b, kw / 2 - 3, kh - (black ? 12 : 34), 6, 6, black ? 0x24dbaa : 0x24a080, 3);
+            if (!black) U.key_lbl[k] = sw_label(b, "", SW_F_SMALL, 0x202020, 0, kh - 20, kw, true);
+        }
+    U.kb_oct = sw_label(p, "", SW_F_SMALL, SW_DIM, KB_X0 + KB_WHITES * KB_WW + 4, KB_Y - 18, 60, false);
 }
 
 static void paint_editor(void) {
@@ -157,6 +243,7 @@ static void paint_editor(void) {
         snprintf(t, sizeof t, "tap a step");
     }
     lv_label_set_text(U.e_sel, t);
+    if (U.key[0]) paint_keys();
 }
 
 static void paint_bottom(void) {
@@ -227,7 +314,10 @@ static int clampi(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v;
 static void note_cb(void *ud) {
     s1_step_t *st = sel_step();
     if (!st) return;
-    st->note = (uint8_t)clampi(st->note + (int)(intptr_t)ud, 0, 127);
+    int d = (int)(intptr_t)ud, n = st->note + d;
+    if (d == 1 || d == -1)   // a semitone: in a scale, its next note
+        while (n > 0 && n < 127 && !s1_in_scale(n, g_s1.scale_root, g_s1.scale)) n += d;
+    st->note = (uint8_t)clampi(n, 0, 127);
     U.last_note[U.sel_lane] = st->note;
     edited(U.sel_lane);
 }
@@ -371,8 +461,8 @@ static void steps_create(lv_obj_t *p) {
     for (int l = 0; l < S1_LANES; l++) {
         int y = ROW_Y0 + l * ROW_P;
         char t[4] = {(char)('A' + l), 0};
-        U.lane_b[l] = sw_btn(p, t, 6, y, 54, 52, LANE_C[l], lane_cb, (void *)(intptr_t)l, SW_F_MID);
-        U.mute_b[l] = sw_btn(p, "M", 6, y + 56, 54, ROW_H - 56, SW_RED, mute_cb, (void *)(intptr_t)l, NULL);
+        U.lane_b[l] = sw_btn(p, t, 6, y, 54, 36, LANE_C[l], lane_cb, (void *)(intptr_t)l, SW_F_MID);
+        U.mute_b[l] = sw_btn(p, "M", 6, y + 40, 54, ROW_H - 40, SW_RED, mute_cb, (void *)(intptr_t)l, NULL);
         for (int i = 0; i < S1_STEPS; i++) {
             cell_t *c = &U.cell[l][i];
             c->box = sw_box(p, CELL_X0 + i * CELL_P, y, CELL_W, ROW_H, 0x141414, 0);
@@ -383,9 +473,9 @@ static void steps_create(lv_obj_t *p) {
             c->vel = sw_label(c->box, "", SW_F_SMALL, SW_BG, 0, ROW_H - 20, 0, false);
             lv_obj_align(c->vel, LV_ALIGN_BOTTOM_RIGHT, -4, -4);
         }
-        U.arp_b[l] = sw_btn(p, "ARP OFF", 918, y, 100, 30, ACC, arp_cb, (void *)(intptr_t)l, SW_F_SMALL);
-        U.mode_b[l] = sw_btn(p, "UP", 918, y + 34, 100, 30, ACC, mode_cb, (void *)(intptr_t)l, SW_F_SMALL);
-        U.rate_b[l] = sw_btn(p, "RATE", 918, y + 68, 100, 30, ACC, rate_cb, (void *)(intptr_t)l, SW_F_SMALL);
+        U.arp_b[l] = sw_btn(p, "ARP OFF", 918, y, 100, 31, ACC, arp_cb, (void *)(intptr_t)l, SW_F_SMALL);
+        U.mode_b[l] = sw_btn(p, "UP", 918, y + 35, 48, 31, ACC, mode_cb, (void *)(intptr_t)l, SW_F_SMALL);
+        U.rate_b[l] = sw_btn(p, "1/16", 970, y + 35, 48, 31, ACC, rate_cb, (void *)(intptr_t)l, SW_F_SMALL);
     }
     // the picked lane
     int y = ROW_Y0 + S1_LANES * ROW_P - 2;
@@ -403,6 +493,7 @@ static void steps_create(lv_obj_t *p) {
     for (int i = 0; i < 3; i++)
         U.b_cv[i] = sw_btn(p, CVN[i], 498 + i * 62, y, 58, 40, ACC, cv_cb, (void *)(intptr_t)i, NULL);
     U.b_slot = sw_label(p, "", SW_F_SMALL, SW_DIM, 700, y + 14, 318, false);
+    keyboard_create(p);
 }
 
 // the playhead: one cell outlined per lane
@@ -597,6 +688,20 @@ static void set_refresh(void) {
     char t[96];
     s1_cv_status(t, sizeof t);
     lv_label_set_text(U.s_cv, t);
+    lv_label_set_text(U.s_root, S1_ROOT_NAMES[g_s1.scale_root]);
+    lv_label_set_text(U.s_scale, S1_SCALE_NAMES[g_s1.scale]);
+}
+
+static void root_cb(void *ud) {
+    g_s1.scale_root = (uint8_t)((g_s1.scale_root + (int)(intptr_t)ud + 12) % 12);
+    s1_changed();
+    set_refresh();
+}
+
+static void scale_cb(void *ud) {
+    g_s1.scale = (uint8_t)((g_s1.scale + (int)(intptr_t)ud + SC_COUNT) % SC_COUNT);
+    s1_changed();
+    set_refresh();
 }
 
 static void range_cb(void *ud) {
@@ -620,6 +725,21 @@ static void set_create(lv_obj_t *p) {
              "notes above 5 V drop by octaves.\n\n"
              "The DACs belong to one sequencer at a time: the first one switched on.",
              SW_F_SMALL, SW_DIM, x, 120, 630, false);
+
+    sw_label(p, "SCALE", SW_F_LABEL, ACC, x, 270, 0, false);
+    sw_label(p, "ROOT", SW_F_SMALL, SW_DIM, x, 310, 0, false);
+    sw_btn(p, "<", x + 60, 298, 40, 40, ACC, root_cb, (void *)-1, SW_F_MID);
+    U.s_root = sw_label(p, "", SW_F_LABEL, SW_TEXT, x + 102, 310, 56, true);
+    sw_btn(p, ">", x + 160, 298, 40, 40, ACC, root_cb, (void *)1, SW_F_MID);
+    sw_label(p, "SCALE", SW_F_SMALL, SW_DIM, x + 220, 310, 0, false);
+    sw_btn(p, "<", x + 270, 298, 40, 40, ACC, scale_cb, (void *)-1, SW_F_MID);
+    U.s_scale = sw_label(p, "", SW_F_LABEL, SW_TEXT, x + 312, 310, 120, true);
+    sw_btn(p, ">", x + 434, 298, 40, 40, ACC, scale_cb, (void *)1, SW_F_MID);
+    sw_label(p,
+             "Every lane's notes snap to the nearest note of the scale as they play (down on a tie),\n"
+             "chords included. The keyboard marks the scale's notes with a dot; NOTE -/+ steps\n"
+             "through them. CHROMATIC leaves every note as it is.",
+             SW_F_SMALL, SW_DIM, x, 350, 630, false);
 }
 
 // --- the header and the pages -----------------------------------------------------------

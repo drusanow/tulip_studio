@@ -57,7 +57,12 @@ own instead.)
   * **ON / OFF** switches the app on (it starts the first time) or off. An app that is
     off drops its gates low, stops sounding and gets no CPU time.
   * **SHOW** goes to an app that is on.
-  * The **mixer strip** (level, mute, peak meter) shows while the app is on.
+  * The **mixer strip** (level, mute, meter) shows while the app is on.
+    * **The bar** is the app's loudness (RMS, about 300 ms), so apps compare the way they
+      sound.
+    * **The white tick** is its peak, which turns red at full scale.
+    * Drum samples peak near full scale while sitting about 16 dB lower on average. With
+      a peak-only meter, Drumster9 looked loudest while it sounded quietest.
 * **ROUTING:** where the notes of each track of every sequencer that is on go. Four
   tracks show at a time, with arrows for more; a new sequencer app gets rows too:
   * **OWN SOUND:** metroseq's preview voice.

@@ -29,6 +29,14 @@ extern const char *const S1_ARP_NAMES[ARP_MODES];
 extern const char *const S1_RATE_NAMES[ARP_RATES];
 int s1_rate_ticks(int rate);
 
+// quantise scales (notes snap to the nearest in the scale as they play)
+enum { SC_CHROMATIC = 0, SC_MAJOR, SC_MINOR, SC_DORIAN, SC_PHRYGIAN, SC_LYDIAN, SC_MIXOLYDIAN,
+       SC_HARM_MINOR, SC_PENTA_MAJ, SC_PENTA_MIN, SC_BLUES, SC_COUNT };
+extern const char *const S1_SCALE_NAMES[SC_COUNT];
+extern const char *const S1_ROOT_NAMES[12];
+bool s1_in_scale(int note, int root, int scale);
+int s1_quantise(int note, int root, int scale);   // the nearest scale note (down on a tie)
+
 // note lengths offered (in 1/16s), and their names
 #define S1_LENS 8
 extern const uint8_t S1_LEN_VALUES[S1_LENS];        // 1 2 3 4 6 8 12 16
@@ -65,6 +73,8 @@ typedef struct {
     s1_lane_t lane[S1_LANES];
     s1_pat_t pat[S1_LANES][S1_SLOTS];
     uint8_t cv_5v;      // pitch 0-5 V (AMYboard inputs) instead of 0-10 V
+    uint8_t scale_root; // 0 = C .. 11 = B
+    uint8_t scale;      // SC_*
 } s1_state_t;
 
 void s1_defaults(s1_state_t *s);                // four lanes, a starting pattern on A
