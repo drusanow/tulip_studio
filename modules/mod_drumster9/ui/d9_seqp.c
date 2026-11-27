@@ -29,7 +29,7 @@
 static int cell_x(int k) { return CELL_X0 + k * CELL_DX + k / 4; }
 
 static struct {
-    lv_obj_t *cell[D9_LANES][D9_STEPS], *led[D9_STEPS];
+    lv_obj_t *cell[D9_LANES][D9_STEPS], *led[D9_STEPS], *head, *hit[D9_LANES];
     lv_obj_t *pad[D9_LANES], *mute[D9_LANES], *solo[D9_LANES], *kitb[D9_LANES];
     lv_obj_t *slot[D9_BANKS], *copy, *paste, *cv;
     lv_obj_t *preset_lbl, *kit_lbl, *proj_lbl;
@@ -276,17 +276,22 @@ void d9_seq_page_tick(uint32_t ms) {
     for (int l = 0; l < D9_LANES; l++)
         if (g_d9.mask[l] != S.shown[l] || g_d9.bus[l] != S.bus_shown[l]) paint_lane(l, g_d9.bus[l] != S.bus_shown[l]);
     // playhead
+    // playhead: one marker moved along the strip (a small redraw, not a restyle)
     int st = g_d9s.playing ? g_d9s.step : -1;
     if (st != S.led_lit) {
-        if (S.led_lit >= 0) lv_obj_set_style_bg_color(S.led[S.led_lit], sw_c(S.led_lit % 4 ? 0x242424 : SW_LINE), 0);
-        if (st >= 0) lv_obj_set_style_bg_color(S.led[st], sw_c(ACC), 0);
+        if (st < 0) {
+            lv_obj_add_flag(S.head, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_set_x(S.head, cell_x(st));
+            if (S.led_lit < 0) lv_obj_remove_flag(S.head, LV_OBJ_FLAG_HIDDEN);
+        }
         S.led_lit = st;
     }
-    // the pads light for a moment on each hit
+    // a small dot by each lane's pad lights for a moment on each hit
     for (int l = 0; l < D9_LANES; l++) {
         bool on = (uint32_t)(ms - g_d9s.hit_ms[l]) < 90;
         if (on != ((S.lit >> l) & 1)) {
-            sw_btn_set(S.pad[l], on);
+            lv_obj_set_style_bg_color(S.hit[l], sw_c(on ? ACC : 0x242424), 0);
             S.lit ^= (uint8_t)(1u << l);
         }
     }
@@ -316,10 +321,13 @@ void d9_seq_page_create(lv_obj_t *p) {
     for (int k = 0; k < D9_STEPS; k++) {
         S.led[k] = sw_box(p, cell_x(k), LANE_Y0 - 12, CELL_W, 6, k % 4 ? 0x242424 : SW_LINE, 0);
     }
+    S.head = sw_box(p, cell_x(0), LANE_Y0 - 12, CELL_W, 6, ACC, 0);
+    lv_obj_add_flag(S.head, LV_OBJ_FLAG_HIDDEN);
     // the lanes
     for (int l = 0; l < D9_LANES; l++) {
         int y = LANE_Y0 + l * LANE_DY;
         S.pad[l] = sw_btn(p, D9_SHORT[l], 8, y, 40, CELL_H, ACC, pad_cb, (void *)(intptr_t)l, SW_F_LABEL);
+        S.hit[l] = sw_box(p, 8 + 40 - 9, y + 3, 6, 6, 0x242424, 3);   // lights on each hit
         S.mute[l] = sw_btn(p, "M", 52, y, 38, CELL_H, SW_RED, mute_cb, (void *)(intptr_t)l, NULL);
         S.solo[l] = sw_btn(p, "S", 94, y, 38, CELL_H, SW_YELLOW, solo_cb, (void *)(intptr_t)l, NULL);
         sw_btn(p, "R", 136, y, 38, CELL_H, ACC, rnd_cb, (void *)(intptr_t)l, NULL);
