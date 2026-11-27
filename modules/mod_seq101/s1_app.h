@@ -23,5 +23,13 @@ void s1_activate(int lane, int slot);
 // something changed: kept in /files/seq101/state.json a moment later
 void s1_changed(void);
 
+// projects: the whole state under a name, in /files/seq101/projects (UI task)
+#define S1_PROJ_NAME 24
+#define S1_MAX_PROJ 24
+int s1_proj_list(char (*names)[S1_PROJ_NAME + 1], int max);   // sorted; returns how many
+bool s1_proj_save(const char *name);     // new, or over the one of that name
+bool s1_proj_load(const char *name);     // replaces everything; false: left as it was
+bool s1_proj_delete(const char *name);
+
 // the CV: who has the DACs, as a line for the UI
 void s1_cv_status(char *out, int n);

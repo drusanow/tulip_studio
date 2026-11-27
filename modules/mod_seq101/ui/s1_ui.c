@@ -39,7 +39,7 @@ static const uint32_t LANE_C[S1_LANES] = {SW_ORANGE, SW_YELLOW, 0xff4848, SW_CYA
 #define KB_OCTS 2
 #define KB_WHITES (7 * KB_OCTS)
 
-enum { PG_STEPS, PG_PATS, PG_SET, PG_COUNT };
+enum { PG_STEPS, PG_PATS, PG_PROJ, PG_SET, PG_COUNT };
 
 typedef struct {
     lv_obj_t *box, *txt, *vel;
@@ -281,13 +281,42 @@ static void edited(int l) {
 
 // --- STEPS: touch ---------------------------------------------------------------------------
 
+// take a note away (hold it, or tap it twice quickly)
+static void delete_note(int l, int step) {
+    memset(&cur_pat(l)->st[step], 0, sizeof(s1_step_t));
+    if (U.sel_lane == l && U.sel_step == step) U.sel_step = -1;
+    paint_lane(l);
+    paint_editor();
+    s1_changed();
+    say("note deleted");
+}
+
+static void cell_hold(lv_event_t *e) {
+    int id = (int)(intptr_t)lv_event_get_user_data(e);
+    int l = id / S1_STEPS, i = id % S1_STEPS;
+    if (i >= g_s1.lane[l].length) return;
+    int owner = s1_owner(cur_pat(l), g_s1.lane[l].length, i);
+    if (owner >= 0) delete_note(l, owner);
+}
+
 static void cell_event(lv_event_t *e) {
+    static uint32_t last_ms;
+    static int last_id = -1;
     int id = (int)(intptr_t)lv_event_get_user_data(e);
     int l = id / S1_STEPS, i = id % S1_STEPS;
     s1_pat_t *p = cur_pat(l);
     int len = g_s1.lane[l].length;
     if (i >= len) return;
     int owner = s1_owner(p, len, i);
+    uint32_t ms = now_ms();
+    bool twice = owner >= 0 && last_id == l * S1_STEPS + owner && ms - last_ms < 350;
+    last_ms = ms;
+    last_id = owner >= 0 ? l * S1_STEPS + owner : l * S1_STEPS + i;
+    if (twice) {   // a double tap
+        last_id = -1;
+        delete_note(l, owner);
+        return;
+    }
     int old = U.sel_lane;
     U.sel_lane = l;
     if (owner >= 0) {
@@ -469,6 +498,7 @@ static void steps_create(lv_obj_t *p) {
             lv_obj_set_style_border_width(c->box, 1, 0);
             lv_obj_add_flag(c->box, LV_OBJ_FLAG_CLICKABLE);
             lv_obj_add_event_cb(c->box, cell_event, LV_EVENT_PRESSED, (void *)(intptr_t)(l * S1_STEPS + i));
+            lv_obj_add_event_cb(c->box, cell_hold, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)(l * S1_STEPS + i));
             c->txt = sw_label(c->box, "", SW_F_SMALL, SW_BG, 5, 5, 0, false);
             c->vel = sw_label(c->box, "", SW_F_SMALL, SW_BG, 0, ROW_H - 20, 0, false);
             lv_obj_align(c->vel, LV_ALIGN_BOTTOM_RIGHT, -4, -4);
@@ -680,6 +710,143 @@ static void pats_tick(uint32_t ms) {
     U.blink = b;
 }
 
+// --- PROJECTS: the whole sequencer under a name ---------------------------------------------
+
+#define PJ_N 16
+#define PJ_Y 44
+#define PJ_DY 50
+
+static struct {
+    lv_obj_t *item[PJ_N], *del, *msg, *empty;
+    char names[S1_MAX_PROJ][S1_PROJ_NAME + 1];
+    int n, sel;
+    bool armed;
+    char cur[S1_PROJ_NAME + 1];   // the one loaded / saved last
+} PJ = {.sel = -1};
+
+static void pj_say(const char *t) { lv_label_set_text(PJ.msg, t); }
+
+static void pj_disarm(void) {
+    PJ.armed = false;
+    sw_btn_text(PJ.del, "DELETE");
+    sw_btn_set(PJ.del, false);
+}
+
+static void proj_refresh(void) {
+    PJ.n = s1_proj_list(PJ.names, S1_MAX_PROJ);
+    if (PJ.sel >= PJ.n) PJ.sel = -1;
+    if (PJ.sel < 0 && PJ.cur[0])
+        for (int i = 0; i < PJ.n; i++)
+            if (!strcmp(PJ.names[i], PJ.cur)) PJ.sel = i;
+    for (int i = 0; i < PJ_N; i++) {
+        if (i >= PJ.n) {
+            lv_obj_add_flag(PJ.item[i], LV_OBJ_FLAG_HIDDEN);
+            continue;
+        }
+        lv_obj_remove_flag(PJ.item[i], LV_OBJ_FLAG_HIDDEN);
+        sw_btn_text(PJ.item[i], PJ.names[i]);
+        sw_btn_set(PJ.item[i], i == PJ.sel);
+    }
+    if (PJ.n)
+        lv_obj_add_flag(PJ.empty, LV_OBJ_FLAG_HIDDEN);
+    else
+        lv_obj_remove_flag(PJ.empty, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void pj_item_cb(void *ud) {
+    pj_disarm();
+    PJ.sel = (int)(intptr_t)ud;
+    proj_refresh();
+}
+
+static void pj_saved(const char *name, void *ud) {
+    char nm[S1_PROJ_NAME + 1];
+    snprintf(nm, sizeof nm, "%s", name);
+    for (char *c = nm; *c; c++)   // a file name: no folders
+        if (*c == '/' || *c == '\\' || *c == ':') *c = '-';
+    char t[64];
+    if (s1_proj_save(nm)) {
+        snprintf(PJ.cur, sizeof PJ.cur, "%s", nm);
+        PJ.sel = -1;
+        snprintf(t, sizeof t, "saved %s", nm);
+    } else {
+        snprintf(t, sizeof t, "couldn't write the file");
+    }
+    proj_refresh();
+    pj_say(t);
+}
+
+static void pj_save_as_cb(void *ud) {
+    pj_disarm();
+    char def[S1_PROJ_NAME + 1];
+    if (PJ.cur[0])
+        snprintf(def, sizeof def, "%s", PJ.cur);
+    else
+        snprintf(def, sizeof def, "Project %d", PJ.n + 1);
+    sw_text_entry("SAVE SEQ101 PROJECT", def, S1_PROJ_NAME, ACC, pj_saved, NULL);
+}
+
+static void pj_save_cb(void *ud) {
+    pj_disarm();
+    if (PJ.sel < 0) return pj_save_as_cb(NULL);
+    char nm[S1_PROJ_NAME + 1];
+    snprintf(nm, sizeof nm, "%s", PJ.names[PJ.sel]);
+    pj_saved(nm, NULL);
+}
+
+static void pj_load_cb(void *ud) {
+    pj_disarm();
+    if (PJ.sel < 0) return pj_say("pick a project first");
+    char t[64];
+    if (s1_proj_load(PJ.names[PJ.sel])) {
+        snprintf(PJ.cur, sizeof PJ.cur, "%s", PJ.names[PJ.sel]);
+        U.sel_step = -1;
+        snprintf(t, sizeof t, "loaded %s", PJ.cur);
+    } else {
+        snprintf(t, sizeof t, "couldn't read %s", PJ.names[PJ.sel]);
+    }
+    pj_say(t);
+}
+
+static void pj_del_cb(void *ud) {
+    if (PJ.sel < 0) return pj_say("pick a project first");
+    if (!PJ.armed) {   // tap twice
+        PJ.armed = true;
+        sw_btn_text(PJ.del, "SURE?");
+        sw_btn_set(PJ.del, true);
+        return;
+    }
+    pj_disarm();
+    char t[64];
+    snprintf(t, sizeof t, s1_proj_delete(PJ.names[PJ.sel]) ? "deleted %s" : "couldn't delete %s",
+             PJ.names[PJ.sel]);
+    if (!strcmp(PJ.cur, PJ.names[PJ.sel])) PJ.cur[0] = 0;
+    PJ.sel = -1;
+    proj_refresh();
+    pj_say(t);
+}
+
+static void proj_create(lv_obj_t *p) {
+    sw_label(p, "PROJECTS", SW_F_LABEL, ACC, 12, 12, 0, false);
+    sw_label(p, "everything - all four lanes, their patterns and chains, the scale and the CV range - "
+                "under a name, in /files/seq101/projects",
+             SW_F_SMALL, SW_DIM, 110, 14, 0, false);
+    for (int i = 0; i < PJ_N; i++)
+        PJ.item[i] = sw_btn(p, "", 12 + (i / 8) * 336, PJ_Y + (i % 8) * PJ_DY, 330, 44, ACC, pj_item_cb,
+                            (void *)(intptr_t)i, NULL);
+    PJ.empty = sw_label(p, "No projects yet. SAVE AS... keeps what you have under a name.", SW_F_LABEL, SW_DIM,
+                        12, PJ_Y + 10, 640, false);
+    const int x = 700;
+    sw_btn(p, "LOAD", x, PJ_Y, 150, 48, ACC, pj_load_cb, NULL, NULL);
+    sw_btn(p, "SAVE", x + 158, PJ_Y, 150, 48, ACC, pj_save_cb, NULL, NULL);
+    sw_btn(p, "SAVE AS...", x, PJ_Y + 56, 308, 48, ACC, pj_save_as_cb, NULL, NULL);
+    PJ.del = sw_btn(p, "DELETE", x, PJ_Y + 112, 308, 48, SW_RED, pj_del_cb, NULL, NULL);
+    PJ.msg = sw_label(p, "", SW_F_LABEL, SW_TEXT, x, PJ_Y + 176, 308, false);
+    sw_label(p, "LOAD replaces everything (it plays on, in time).\nSAVE writes over the picked one;\n"
+                "SAVE AS... asks for a name.\nDELETE: tap twice.",
+             SW_F_SMALL, SW_DIM, x, PJ_Y + 210, 308, false);
+}
+
 // --- SET ----------------------------------------------------------------------------------
 
 static void set_refresh(void) {
@@ -747,6 +914,7 @@ static void set_create(lv_obj_t *p) {
 static void refresh_page(int i) {
     if (i == PG_STEPS) steps_refresh();
     if (i == PG_PATS) pats_refresh();
+    if (i == PG_PROJ) proj_refresh();
     if (i == PG_SET) set_refresh();
 }
 
@@ -778,15 +946,15 @@ void s1_ui_create(lv_obj_t *s) {
     sw_btn_repeat(sw_btn(s, "-", 198, y, 40, h, ACC, bpm_cb, (void *)0, SW_F_MID));
     U.bpm = sw_label(s, "", SW_F_LABEL, SW_TEXT, 240, 20, 76, true);
     sw_btn_repeat(sw_btn(s, "+", 318, y, 40, h, ACC, bpm_cb, (void *)1, SW_F_MID));
-    static const char *const names[PG_COUNT] = {"STEPS", "PATTERNS", "SET"};
-    static const int w[PG_COUNT] = {90, 110, 70};
+    static const char *const names[PG_COUNT] = {"STEPS", "PATTERNS", "PROJECTS", "SET"};
+    static const int w[PG_COUNT] = {84, 104, 104, 64};
     for (int i = 0, x = 372; i < PG_COUNT; x += w[i] + 6, i++)
         U.tabs[i] = sw_btn(s, names[i], x, y, w[i], h, ACC, tab_cb, (void *)(intptr_t)i, NULL);
-    U.info = sw_label(s, "", SW_F_SMALL, SW_DIM, 668, 22, STUDIO_SQ_X - 668 - 6, false);
+    U.info = sw_label(s, "", SW_F_SMALL, SW_DIM, 752, 22, STUDIO_SQ_X - 752 - 6, false);
     lv_label_set_long_mode(U.info, LV_LABEL_LONG_CLIP);
     studio_chrome(s);
     sw_line(s, 0, STUDIO_HDR_LINE_Y, 1024, 1);
-    void (*make[PG_COUNT])(lv_obj_t *) = {steps_create, pats_create, set_create};
+    void (*make[PG_COUNT])(lv_obj_t *) = {steps_create, pats_create, proj_create, set_create};
     for (int i = 0; i < PG_COUNT; i++) {
         lv_obj_t *g = U.pages[i] = sw_box(s, 0, PAGE_Y, 1024, PAGE_H, SW_BG, 0);
         lv_obj_add_flag(g, LV_OBJ_FLAG_CLICKABLE);

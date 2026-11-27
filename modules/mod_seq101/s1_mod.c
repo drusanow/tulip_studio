@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <dirent.h>
+#include <strings.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -158,18 +160,14 @@ static void path(char *out, int n, const char *file) {
     snprintf(out, n, "%s/seq101/%s", root ? root : "/nonexistent", file);
 }
 
-static void save_now(void) {
-    s_dirty = false;
-    if (!studio_files_root()) return;
-    char p[96], tmp[100];
-    path(p, sizeof p, "");
-    mkdir(p, 0775);
-    path(p, sizeof p, "state.json");
+// the state as JSON to p, through a temporary file (a power cut never leaves half a file)
+static bool write_state(const char *p) {
+    char tmp[112];
     snprintf(tmp, sizeof tmp, "%s.tmp", p);
     cJSON *o = s1_to_json(&g_s1);
     char *txt = cJSON_Print(o);
     cJSON_Delete(o);
-    if (!txt) return;
+    if (!txt) return false;
     FILE *f = fopen(tmp, "wb");
     bool ok = f && fputs(txt, f) >= 0;
     if (f && fclose(f) != 0) ok = false;
@@ -179,25 +177,103 @@ static void save_now(void) {
         ok = rename(tmp, p) == 0;
     }
     if (!ok) ESP_LOGW(TAG, "couldn't write %s", p);
+    return ok;
+}
+
+// p into the state (keys it lacks keep their values); false if unreadable
+static bool read_state(const char *p) {
+    FILE *f = fopen(p, "rb");
+    if (!f) return false;
+    fseek(f, 0, SEEK_END);
+    long n = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    char *txt = n > 0 && n < 256 * 1024 ? malloc((size_t)n + 1) : NULL;
+    bool ok = false;
+    if (txt && fread(txt, 1, (size_t)n, f) == (size_t)n) {
+        txt[n] = 0;
+        cJSON *o = cJSON_Parse(txt);
+        if (o) {
+            s1_from_json(o, &g_s1);
+            ok = true;
+        }
+        cJSON_Delete(o);
+    }
+    free(txt);
+    fclose(f);
+    return ok;
+}
+
+static void save_now(void) {
+    s_dirty = false;
+    if (!studio_files_root()) return;
+    char p[96];
+    path(p, sizeof p, "");
+    mkdir(p, 0775);
+    path(p, sizeof p, "state.json");
+    write_state(p);
 }
 
 static void load(void) {
     char p[96];
     path(p, sizeof p, "state.json");
-    FILE *f = fopen(p, "rb");
-    if (!f) return;
-    fseek(f, 0, SEEK_END);
-    long n = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    char *txt = n > 0 && n < 256 * 1024 ? malloc((size_t)n + 1) : NULL;
-    if (txt && fread(txt, 1, (size_t)n, f) == (size_t)n) {
-        txt[n] = 0;
-        cJSON *o = cJSON_Parse(txt);
-        if (o) s1_from_json(o, &g_s1);
-        cJSON_Delete(o);
+    read_state(p);
+}
+
+// --- projects: /files/seq101/projects/<name>.json, the whole state -----------------------
+
+static void proj_path(char *out, int n, const char *name) {
+    const char *root = studio_files_root();
+    snprintf(out, n, "%s/seq101/projects/%s.json", root ? root : "/nonexistent", name);
+}
+
+static int cmp_name(const void *a, const void *b) { return strcasecmp((const char *)a, (const char *)b); }
+
+int s1_proj_list(char (*names)[S1_PROJ_NAME + 1], int max) {
+    char p[96];
+    path(p, sizeof p, "projects");
+    DIR *d = opendir(p);
+    if (!d) return 0;
+    int n = 0;
+    struct dirent *e;
+    while ((e = readdir(d)) && n < max) {
+        size_t l = strlen(e->d_name);
+        if (l < 6 || l - 5 > S1_PROJ_NAME || strcmp(e->d_name + l - 5, ".json")) continue;
+        snprintf(names[n], S1_PROJ_NAME + 1, "%.*s", (int)(l - 5), e->d_name);
+        n++;
     }
-    free(txt);
-    fclose(f);
+    closedir(d);
+    qsort(names, n, sizeof names[0], cmp_name);
+    return n;
+}
+
+bool s1_proj_save(const char *name) {
+    if (!studio_files_root() || !name[0]) return false;
+    char p[112];
+    path(p, sizeof p, "");
+    mkdir(p, 0775);
+    path(p, sizeof p, "projects");
+    mkdir(p, 0775);
+    proj_path(p, sizeof p, name);
+    return write_state(p);
+}
+
+bool s1_proj_load(const char *name) {
+    char p[112];
+    proj_path(p, sizeof p, name);
+    static s1_state_t keep;
+    keep = g_s1;
+    if (!read_state(p)) {
+        g_s1 = keep;
+        return false;
+    }
+    s1_changed();
+    return true;
+}
+
+bool s1_proj_delete(const char *name) {
+    char p[112];
+    proj_path(p, sizeof p, name);
+    return unlink(p) == 0;
 }
 
 // --- module ------------------------------------------------------------------------------------

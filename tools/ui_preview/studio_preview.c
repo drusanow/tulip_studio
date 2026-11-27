@@ -381,13 +381,20 @@ int main(void) {
     hx_tap(66 + 3 * 53 + 25, 64 + 70 + 50);   // pick A's 4th step
     hx_pump(100);
     hx_save("seq101_1_steps");
-    hx_tap(468 + 55, 28);                     // PATTERNS
+    hx_tap(462 + 52, 28);                     // PATTERNS
     hx_pump(100);
     hx_save("seq101_2_patterns");
-    hx_tap(584 + 35, 28);                     // SET
+    s1_proj_save("Bass and pads");
+    s1_proj_save("Live set A");
+    hx_tap(572 + 52, 28);                     // PROJECTS
+    hx_pump(100);
+    hx_tap(12 + 165, 64 + 44 + 50 + 22);      // the second one
+    hx_pump(100);
+    hx_save("seq101_4_projects");
+    hx_tap(682 + 32, 28);                     // SET
     hx_pump(200);
     hx_save("seq101_3_set");
-    hx_tap(372 + 45, 28);                     // back to STEPS
+    hx_tap(372 + 42, 28);                     // back to STEPS
 
     // a Studio patch: SAVE AS... with its keyboard, then it's in the list
     studio_show_home();
