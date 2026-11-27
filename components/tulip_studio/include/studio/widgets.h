@@ -66,6 +66,14 @@ sw_slider_t *sw_slider(lv_obj_t *parent, const char *label, int x, int y, int w,
                        uint32_t color, const sw_slider_ops_t *ops, void *ud);
 void sw_slider_refresh(sw_slider_t *s);   // after the value changed elsewhere
 
+// A vertical fader, as on a synth's panel: the label on top, the value
+// under it (when ops->text is set). Drag up / down anywhere on its column,
+// relative like sw_slider. Moving the cap is all a change redraws.
+typedef struct sw_fader sw_fader_t;
+sw_fader_t *sw_fader(lv_obj_t *parent, const char *label, int x, int y, int w, int h,
+                     uint32_t color, const sw_slider_ops_t *ops, void *ud);
+void sw_fader_refresh(sw_fader_t *f);
+
 // A full-screen name entry with the on-screen keyboard, over everything
 // (lv_layer_top). SAVE (or the keyboard's tick) calls cb with the name -
 // printable, trimmed, never empty; CANCEL closes it.

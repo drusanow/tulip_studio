@@ -6,7 +6,7 @@ with no MicroPython or AMY.
 **One set of apps, two ways to run them.** The start page has two sections:
 
 * **The apps, each on its own:** metroseq and SEQ101 (sequencers), GinTonix and Drumster9 (drum
-  machines), Sloe and Wavetron (synths).
+  machines), Sloe, Wavetron, JUNO-6 and DX7 (synths).
 * **STUDIO:** the same apps together on one clock. Every app starts off; you switch on
   the ones you want.
 
@@ -43,11 +43,12 @@ tried on a Tulip).
   * ON / OFF for each app on the home page. Only the apps that are on use CPU, RAM or
     audio time.
   * Switch between them with the blue square, as on the original Tulip.
-  * Tags: metroseq (SEQUENCER, CV), GinTonix and Drumster9 (DRUMS), Sloe and Wavetron
-    (SYNTH).
+  * Tags: metroseq and SEQ101 (SEQUENCER, CV), GinTonix and Drumster9 (DRUMS), Sloe,
+    Wavetron, JUNO-6 and DX7 (SYNTH).
   * One tempo and transport, MIDI clock / Start / Stop for all of them.
   * A mixer on the Studio home page: a level, mute and peak meter per app.
-  * Every sequencer's tracks can play Sloe or Wavetron on the Tulip, or go out of MIDI OUT.
+  * Every sequencer's tracks can play a synth on the Tulip (Sloe, Wavetron, JUNO-6, DX7),
+    or go out of MIDI OUT.
   * **Studio patches:** the whole session - tempo, apps, mixer, routing, and every app's
     sounds, patterns and presets - saved to one JSON file and loaded back.
 * **metroseq**: a port of [`reference/metropolix_tulip.py`](reference/metropolix_tulip.py).
@@ -85,6 +86,16 @@ tried on a Tulip).
 * **[SEQ101](docs/SEQ101.md)**: a 4-lane, 16-step note sequencer. Chords, note lengths
   from 1/16 to a bar, an arpeggiator per lane, lane lengths of their own, 12 patterns a
   lane with chains, and each lane to MIDI OUT, CV A / B or a synth on the Tulip.
+* **[JUNO-6](docs/JUNO.md)**: a port of the Tulip's Juno (`juno6.py` on AMY), a 6-voice
+  Juno-6 / 106 style polysynth with a panel laid out like the instrument's.
+  * DCO (pulse with PWM, saw, sub, noise), a 24 dB VCF, VCA on the envelope or gate, LFO
+    with delay, HPF and the chorus (I, II, I+II).
+  * The 128 Juno-106 factory patches in an 8 x 8 bank browser, plus your own.
+* **[DX7](docs/DX7.md)**: a 6-operator FM synth that plays DX7 voices, as the Tulip does
+  with AMY.
+  * The 32 algorithms, operator envelopes, scaling and velocity as on a DX7; 8 voices.
+  * The Tulip's 128 voices built in, your own, and any DX7 bank (`.syx`) from
+    `/files/dx7/`; an edit panel for the algorithm, feedback, LFO and each operator.
 * **[`docs/templates/mod_example`](docs/templates/mod_example)**: the smallest complete
   app, as a template.
 
@@ -97,6 +108,8 @@ tried on a Tulip).
 | ![seq](docs/img/1_seq.png) | ![home](docs/img/launcher_1_home.png) |
 | **Drumster9** | **Drumster9: a sample from any bank** |
 | ![drumster9](docs/img/drumster9_1_seq.png) | ![samples](docs/img/drumster9_3_samples.png) |
+| **JUNO-6** | **DX7** |
+| ![juno](docs/img/juno_1_panel.png) | ![dx7](docs/img/dx7_1_panel.png) |
 
 *(Device screens are rendered from the real UI code by `tools/ui_preview`.)*
 
@@ -112,6 +125,9 @@ modules/               the apps (each an ESP-IDF component with an app.json)
   mod_sloe/            the synth
   mod_wavetron/        the wavetable synth: core/ (host-tested), ui/
   mod_drumster9/       the sample drum machine: core/ (host-tested), ui/
+  mod_seq101/          the 4-lane note sequencer: core/ (host-tested), ui/
+  mod_juno/            the Juno-style polysynth: core/ (host-tested)
+  mod_dx7/             the FM synth: core/ (host-tested)
 components/
   tulip_studio/        the runtime: master clock, real-time task, MIDI in/out, the CV
                        clock, audio mixer, routing, the squares and the home page

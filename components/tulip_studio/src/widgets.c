@@ -236,6 +236,95 @@ sw_slider_t *sw_slider(lv_obj_t *parent, const char *label, int x, int y, int w,
     return s;
 }
 
+// --- fader --------------------------------------------------------------------------------
+
+#define FADER_CAP_H 12
+
+struct sw_fader {
+    lv_obj_t *hit, *cap, *val;
+    int track_h;
+    float v0, shown;
+    int32_t y0;
+    bool drag;
+    sw_slider_ops_t ops;
+    void *ud;
+    char txt[16];
+};
+
+static void fader_draw(sw_fader_t *f) {
+    float v = f->ops.get(f->ud);
+    if (v != f->shown) {
+        f->shown = v;
+        lv_obj_set_y(f->cap, (int32_t)((1.0f - v) * (float)(f->track_h - FADER_CAP_H) + 0.5f));
+    }
+    if (!f->val) return;
+    char t[16] = "";
+    f->ops.text(f->ud, t, sizeof t);
+    if (strcmp(t, f->txt)) {
+        snprintf(f->txt, sizeof f->txt, "%s", t);
+        lv_label_set_text(f->val, t);
+    }
+}
+
+void sw_fader_refresh(sw_fader_t *f) { fader_draw(f); }
+
+static void fader_event(lv_event_t *e) {
+    sw_fader_t *f = lv_event_get_user_data(e);
+    lv_point_t p = {0, 0};
+    lv_indev_t *in = lv_indev_active();
+    if (in) lv_indev_get_point(in, &p);
+    switch (lv_event_get_code(e)) {
+    case LV_EVENT_PRESSED:
+        f->y0 = p.y;
+        f->v0 = f->ops.get(f->ud);
+        f->drag = true;
+        break;
+    case LV_EVENT_PRESSING: {
+        if (!f->drag) break;
+        float v = f->v0 - (float)(p.y - f->y0) / (float)(f->track_h > 60 ? f->track_h : 60);
+        v = v < 0 ? 0 : (v > 1 ? 1 : v);
+        f->ops.set(f->ud, v);
+        fader_draw(f);
+        break;
+    }
+    default:
+        f->drag = false;
+        break;
+    }
+}
+
+sw_fader_t *sw_fader(lv_obj_t *parent, const char *label, int x, int y, int w, int h,
+                     uint32_t color, const sw_slider_ops_t *ops, void *ud) {
+    sw_fader_t *f = calloc(1, sizeof *f);
+    f->ops = *ops;
+    f->ud = ud;
+    f->shown = -1;
+    int top = y + 18, bottom = ops->text ? y + h - 16 : y + h;
+    f->track_h = bottom - top;
+    if (label && label[0]) sw_label(parent, label, SW_F_SMALL, SW_TEXT, x, y, w, true);
+    // the column: what you touch, with the slot and the cap in it
+    f->hit = sw_plain(lv_obj_create(parent), -1, 0);
+    lv_obj_set_pos(f->hit, x, top);
+    lv_obj_set_size(f->hit, w, f->track_h);
+    lv_obj_add_flag(f->hit, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ext_click_area(f->hit, 4);
+    lv_obj_t *slot = sw_box(f->hit, w / 2 - 3, 2, 6, f->track_h - 4, 0x242424, 3);
+    (void)slot;
+    int cw = w - 10 > 36 ? 36 : w - 10;
+    f->cap = sw_box(f->hit, (w - cw) / 2, 0, cw, FADER_CAP_H, (int32_t)color, 4);
+    sw_box(f->cap, 4, FADER_CAP_H / 2 - 1, cw - 8, 2, SW_TEXT, 1);
+    if (ops->text) {
+        f->val = sw_label(parent, "", SW_F_SMALL, SW_DIM, x - 6, bottom + 2, w + 12, true);
+        lv_label_set_long_mode(f->val, LV_LABEL_LONG_CLIP);
+    }
+    lv_obj_add_event_cb(f->hit, fader_event, LV_EVENT_PRESSED, f);
+    lv_obj_add_event_cb(f->hit, fader_event, LV_EVENT_PRESSING, f);
+    lv_obj_add_event_cb(f->hit, fader_event, LV_EVENT_RELEASED, f);
+    lv_obj_add_event_cb(f->hit, fader_event, LV_EVENT_PRESS_LOST, f);
+    fader_draw(f);
+    return f;
+}
+
 // --- name entry ------------------------------------------------------------------------
 
 static struct {

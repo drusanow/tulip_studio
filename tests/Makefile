@@ -16,7 +16,7 @@ SRC = $(ENGINE)/seq_engine.c $(ENGINE)/seq_model.c $(ENGINE)/seq_clock.c $(HAL)/
       $(STUDIO)/src/tclock.c $(STUDIO)/src/midi_parse.c
 HDR = $(wildcard $(ENGINE)/*.h)
 
-all: build/test_engine build/test_midi_touch build/test_launcher build/test_studio build/test_gx build/gx_tool build/test_sloe build/test_wavetron build/test_d9 build/test_s101 build/gamma9001.bin build/sim
+all: build/test_engine build/test_midi_touch build/test_launcher build/test_studio build/test_gx build/gx_tool build/test_sloe build/test_wavetron build/test_d9 build/test_s101 build/test_juno build/test_dx7 build/gamma9001.bin build/sim
 
 build/test_engine: test_engine.c $(SRC) $(HDR) $(ENGINE)/seq_json.c
 	@mkdir -p build
@@ -51,6 +51,16 @@ build/test_sloe: test_sloe.c ../modules/mod_sloe/sloe_dsp.c ../modules/mod_sloe/
 	@mkdir -p build
 	$(CC) $(CFLAGS) -I../modules/mod_sloe -o $@ test_sloe.c ../modules/mod_sloe/sloe_dsp.c -lm
 
+JN = ../modules/mod_juno/core
+build/test_juno: test_juno.c $(JN)/jn_dsp.c $(JN)/jn_patch.c $(JN)/jn_presets.c $(JN)/jn_dsp.h $(JN)/jn_curves.h
+	@mkdir -p build
+	$(CC) $(CFLAGS) -I$(JN) -o $@ test_juno.c $(JN)/jn_dsp.c $(JN)/jn_patch.c $(JN)/jn_presets.c -lm
+
+DX = ../modules/mod_dx7/core
+build/test_dx7: test_dx7.c $(DX)/dx_dsp.c $(DX)/dx_voice.c $(DX)/dx_presets.c $(DX)/dx_dsp.h
+	@mkdir -p build
+	$(CC) $(CFLAGS) -I$(DX) -o $@ test_dx7.c $(DX)/dx_dsp.c $(DX)/dx_voice.c $(DX)/dx_presets.c -lm
+
 WT = ../modules/mod_wavetron/core
 WT_SRC = $(WT)/wt_params.c $(WT)/wt_tables.c $(WT)/wt_dsp.c $(WT)/wt_fx.c $(WT)/wt_patch.c $(CJSON)/cJSON.c
 build/test_wavetron: test_wavetron.c $(WT_SRC) $(wildcard $(WT)/*.h)
@@ -82,6 +92,8 @@ test: all
 	./build/test_wavetron
 	./build/test_d9 build/gamma9001.bin
 	./build/test_s101
+	./build/test_juno
+	./build/test_dx7
 	python3 gx_parity.py
 	python3 py_parity.py
 
