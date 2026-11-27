@@ -8,8 +8,8 @@
 set(mod_root "${CMAKE_CURRENT_LIST_DIR}/../../../modules")
 
 # The order is the Studio's: saved routes and patches go by position, so
-# the first five keep theirs and new apps come after, by name.
-set(known metroseq gintonix sloe wavetron drumster9)
+# the first six keep theirs and new apps come after, by name.
+set(known metroseq gintonix sloe wavetron drumster9 seq101)
 file(GLOB jsons LIST_DIRECTORIES false "${mod_root}/mod_*/app.json")
 list(SORT jsons)
 set(found)

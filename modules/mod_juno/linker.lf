@@ -1,0 +1,7 @@
+# The audio code runs from internal RAM, so a flash write (a file save)
+# can't stall it. Everything render() calls must be in RAM too.
+[mapping:mod_juno]
+archive: libmod_juno.a
+entries:
+    jn_mod:render (noflash)
+    jn_dsp (noflash)

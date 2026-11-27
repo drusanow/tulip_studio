@@ -74,7 +74,7 @@ tools/build_elf_app.sh modules/mod_<name>   # optional: the app as a loadable .e
   page.
 * Edit generated files (`apps.gen.c`, `abi_exports.c`), or the vendored
   components: `components/lvgl`, `components/mdns`, `components/elf_loader`.
-* Reorder the first five apps (`metroseq gintonix sloe wavetron drumster9`):
+* Reorder the first six apps (`metroseq gintonix sloe wavetron drumster9 seq101`):
   saved routes and patches go by position.
 * Commit build output (`build/`, `*.bin`, `sdkconfig` under `apps/`).
 * Say something works on the Tulip when it has only built. Assistants have no

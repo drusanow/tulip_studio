@@ -15,6 +15,8 @@
 #include "mod_wavetron.h"
 #include "mod_drumster9.h"
 #include "mod_seq101.h"
+#include "mod_juno.h"
+#include "mod_dx7.h"
 #include "s1_app.h"
 #include "d9_app.h"
 #include "platform/preview_audio.h"
@@ -148,8 +150,8 @@ int main(void) {
     hx_init();
     hx_poll = shell_ui_poll;
     static const tmod_t *const mods[] = {&mod_metroseq, &mod_gintonix, &mod_sloe, &mod_wavetron,
-                                         &mod_drumster9, &mod_seq101};
-    studio_run(mods, 6);
+                                         &mod_drumster9, &mod_seq101, &mod_dx7, &mod_juno};
+    studio_run(mods, 8);
     g_cfg.shown = -1;   // start on the home page
     g_cfg.bpm_x100 = 12400;
     studio_route_set(0, 0, 2);            // TRK 1 -> SLOE
@@ -158,7 +160,7 @@ int main(void) {
     preview_set_clock(true, false, false, 0);
     hx_pump(300);
     hx_save("studio_0_home_all_off");   // the Studio starts with every app off
-    for (int i = 0; i < 6; i++) shell_set_open(i, true);
+    for (int i = 0; i < 8; i++) shell_set_open(i, true);
     hx_pump(600);
     hx_save("studio_1_home");
 
@@ -395,6 +397,28 @@ int main(void) {
     hx_pump(200);
     hx_save("seq101_3_set");
     hx_tap(372 + 42, 28);                     // back to STEPS
+
+    // DX7: the panel, then the voice browser
+    studio_show_module(6);
+    hx_pump(100);
+    hx_save("dx7_1_panel");
+    hx_tap(12 + 136 + 75, 90 + 70 + 24);      // ALL VOICES
+    hx_pump(100);
+    hx_save("dx7_2_voices");
+    hx_tap(1024 - 12 - 60, 57 + 6 + 17);      // CLOSE
+
+    // JUNO-6: the panel, then the patch browser
+    studio_show_module(7);
+    hx_pump(100);
+    hx_save("juno_1_panel");
+    hx_tap(524 + 136 + 75, 322 + 70 + 24);    // ALL PATCHES
+    hx_pump(100);
+    hx_save("juno_2_patches");
+    hx_tap(12 + 125 + 60, 57 + 48 + 47 + 21); // A22 Organ II
+    hx_pump(100);
+    hx_tap(1024 - 12 - 60, 57 + 6 + 17);      // CLOSE
+    hx_pump(100);
+    hx_save("juno_3_panel_a22");
 
     // a Studio patch: SAVE AS... with its keyboard, then it's in the list
     studio_show_home();

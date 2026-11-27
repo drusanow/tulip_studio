@@ -71,7 +71,7 @@ at start-up.
    * the module table `studio_run()` gets;
    * the **manifest**: the list of apps inside `studio.bin`, which the launcher reads.
 
-   The first five apps keep their places (saved routes and patches go by position).
+   The first six apps keep their places (saved routes and patches go by position).
    New apps come after them, sorted by name. The image holds 16 apps at most.
 3. Upload it:
    ```sh
