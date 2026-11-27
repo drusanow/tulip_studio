@@ -34,6 +34,7 @@ typedef struct {
     volatile uint32_t swaps;          // bumps when a queued slot has come in
     volatile float peak;              // output peak since the UI last took it
     volatile int load_pct;
+    volatile float comp_gr;           // the compressor's gain reduction (1 = none)
     volatile bool samples_ok;         // the samples partition was found
 } d9_status_t;
 extern d9_status_t g_d9s;

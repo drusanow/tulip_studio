@@ -29,14 +29,14 @@ static const uint32_t LANE_C[S1_LANES] = {SW_ORANGE, SW_YELLOW, 0xff4848, SW_CYA
 #define CELL_P 53       // pitch
 #define CELL_W 50
 #define ROW_Y0 68
-#define ROW_P 70
-#define ROW_H 66
-// the keyboard under the lanes: 3 octaves of keys
-#define KB_Y 392
-#define KB_H 138
+#define ROW_P 80
+#define ROW_H 76
+// the keyboard under the lanes: 2 octaves of wide, short keys
+#define KB_Y 432
+#define KB_H 100
 #define KB_X0 50
-#define KB_WW 44        // a white key's pitch
-#define KB_OCTS 3
+#define KB_WW 66        // a white key's pitch
+#define KB_OCTS 2
 #define KB_WHITES (7 * KB_OCTS)
 
 enum { PG_STEPS, PG_PATS, PG_SET, PG_COUNT };
@@ -209,8 +209,8 @@ static void keyboard_create(lv_obj_t *p) {
             bool black = is_black(k % 12);
             if (!black) w++;
             if (black != (pass == 1)) continue;
-            int x = black ? KB_X0 + w * KB_WW - 14 : KB_X0 + (w - 1) * KB_WW;
-            int kw = black ? 28 : KB_WW - 2, kh = black ? KB_H * 6 / 10 : KB_H;
+            int x = black ? KB_X0 + w * KB_WW - 20 : KB_X0 + (w - 1) * KB_WW;
+            int kw = black ? 40 : KB_WW - 2, kh = black ? KB_H * 6 / 10 : KB_H;
             lv_obj_t *b = U.key[k] = sw_box(p, x, KB_Y, kw, kh, 0xf2f2f2, 3);
             lv_obj_set_style_border_width(b, 1, 0);
             lv_obj_set_style_border_color(b, sw_c(0x303030), 0);
@@ -461,8 +461,8 @@ static void steps_create(lv_obj_t *p) {
     for (int l = 0; l < S1_LANES; l++) {
         int y = ROW_Y0 + l * ROW_P;
         char t[4] = {(char)('A' + l), 0};
-        U.lane_b[l] = sw_btn(p, t, 6, y, 54, 36, LANE_C[l], lane_cb, (void *)(intptr_t)l, SW_F_MID);
-        U.mute_b[l] = sw_btn(p, "M", 6, y + 40, 54, ROW_H - 40, SW_RED, mute_cb, (void *)(intptr_t)l, NULL);
+        U.lane_b[l] = sw_btn(p, t, 6, y, 54, 38, LANE_C[l], lane_cb, (void *)(intptr_t)l, SW_F_MID);
+        U.mute_b[l] = sw_btn(p, "M", 6, y + 42, 54, ROW_H - 42, SW_RED, mute_cb, (void *)(intptr_t)l, NULL);
         for (int i = 0; i < S1_STEPS; i++) {
             cell_t *c = &U.cell[l][i];
             c->box = sw_box(p, CELL_X0 + i * CELL_P, y, CELL_W, ROW_H, 0x141414, 0);
@@ -473,9 +473,9 @@ static void steps_create(lv_obj_t *p) {
             c->vel = sw_label(c->box, "", SW_F_SMALL, SW_BG, 0, ROW_H - 20, 0, false);
             lv_obj_align(c->vel, LV_ALIGN_BOTTOM_RIGHT, -4, -4);
         }
-        U.arp_b[l] = sw_btn(p, "ARP OFF", 918, y, 100, 31, ACC, arp_cb, (void *)(intptr_t)l, SW_F_SMALL);
-        U.mode_b[l] = sw_btn(p, "UP", 918, y + 35, 48, 31, ACC, mode_cb, (void *)(intptr_t)l, SW_F_SMALL);
-        U.rate_b[l] = sw_btn(p, "1/16", 970, y + 35, 48, 31, ACC, rate_cb, (void *)(intptr_t)l, SW_F_SMALL);
+        U.arp_b[l] = sw_btn(p, "ARP OFF", 918, y, 100, 36, ACC, arp_cb, (void *)(intptr_t)l, SW_F_SMALL);
+        U.mode_b[l] = sw_btn(p, "UP", 918, y + 40, 48, 36, ACC, mode_cb, (void *)(intptr_t)l, SW_F_SMALL);
+        U.rate_b[l] = sw_btn(p, "1/16", 970, y + 40, 48, 36, ACC, rate_cb, (void *)(intptr_t)l, SW_F_SMALL);
     }
     // the picked lane
     int y = ROW_Y0 + S1_LANES * ROW_P - 2;

@@ -293,6 +293,9 @@ float studio_mix_peak(int mod);
 // by. Drum samples peak near full scale but sit ~16 dB lower on average;
 // a held synth sits only a few dB under its peak.
 float studio_mix_rms(int mod);
+// What the app's render() takes, as % of the time a block lasts (on
+// whichever core it ran: the Studio splits the apps over both).
+int studio_mix_load(int mod);
 
 // --- UI -------------------------------------------------------------------------------------
 

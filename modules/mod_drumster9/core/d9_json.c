@@ -90,6 +90,7 @@ cJSON *d9_project_to_json(const d9_state_t *s, const char *name, float bpm) {
     }
     cJSON_AddNumberToObject(o, "bank_active", s->bank_active);
     cJSON_AddNumberToObject(o, "master_vol", r4(s->master));
+    cJSON_AddNumberToObject(o, "comp", r4(s->comp));
     // only what differs from the kit's own samples, as the Python kept it
     cJSON *ko = cJSON_AddObjectToObject(o, "kit_overrides");
     for (int k = 0; k < D9_KITS; k++) {
@@ -122,6 +123,7 @@ void d9_project_from_json(const cJSON *o, d9_state_t *s, float *bpm) {
     if (!cJSON_IsObject(o)) return;
     double v;
     if (num(o, "master_vol", &v) && v >= 0) s->master = (float)v;
+    if (num(o, "comp", &v) && v >= 0) s->comp = (float)v;
     // the KITS page's samples, per kit and role
     const cJSON *ko = cJSON_GetObjectItemCaseSensitive(o, "kit_overrides");
     const cJSON *kit;

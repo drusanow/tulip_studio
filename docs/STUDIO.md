@@ -61,6 +61,8 @@ own instead.)
     * **The bar** is the app's loudness (RMS, about 300 ms), so apps compare the way they
       sound.
     * **The white tick** is its peak, which turns red at full scale.
+    * **ON 23%** on the tile is what the app's sound costs, as a share of the time each
+      block of audio lasts.
     * Drum samples peak near full scale while sitting about 16 dB lower on average. With
       a peak-only meter, Drumster9 looked loudest while it sounded quietest.
 * **ROUTING:** where the notes of each track of every sequencer that is on go. Four
@@ -205,6 +207,15 @@ of the I2C bus. Touch is read only in gaps longer than a worst-case touch read.
     busy audio block can't make a pulse late, and a late block can't shift the grid.
 
 ### 4.3 Audio (`components/tulip_studio/src/audio.c`)
+
+**Two cores.** Each block, the apps are split between the audio task (core 1) and a
+worker on core 0, which runs above the UI:
+* the costliest app goes first, and each app goes to whichever core has less so far,
+  going by what its sound took last time;
+* the audio task then mixes them all.
+
+So four or more apps can play at once. The UI gets a little less time when the sound is
+heavy. The DMA ring is 8 blocks deep (8.7 ms) to ride out a busy moment.
 
 * **Format:** 44.1 kHz stereo, 16-bit, with a DMA ring of 4 × 48 frames (4.4 ms).
 * **Each block knows when it will be heard.** A block carries the clock time at which

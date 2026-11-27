@@ -58,7 +58,7 @@ build/test_wavetron: test_wavetron.c $(WT_SRC) $(wildcard $(WT)/*.h)
 	$(CC) $(CFLAGS) -I$(WT) -I$(CJSON) -o $@ test_wavetron.c $(WT_SRC) -lm
 
 D9 = ../modules/mod_drumster9/core
-D9_SRC = $(D9)/d9_samples.c $(D9)/d9_model.c $(D9)/d9_seq.c $(D9)/d9_dsp.c $(D9)/d9_json.c \
+D9_SRC = $(D9)/d9_comp.c $(D9)/d9_samples.c $(D9)/d9_model.c $(D9)/d9_seq.c $(D9)/d9_dsp.c $(D9)/d9_json.c \
          $(CJSON)/cJSON.c $(STUDIO)/src/tclock.c
 build/test_d9: test_d9.c $(D9_SRC) $(wildcard $(D9)/*.h)
 	@mkdir -p build

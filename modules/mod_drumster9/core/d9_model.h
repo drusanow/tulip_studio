@@ -82,6 +82,7 @@ typedef struct {
     int16_t kit_map[D9_KITS][D9_LANES];
     d9_bus_t fx[D9_BUSES];
     float master;                     // the Python's units: 15 = the default level
+    float comp;                       // the drum-bus compressor, 0 (off) .. 1
     d9_slot_t bank[D9_BANKS];
     int8_t bank_active;
     int8_t preset;                    // last preset picked (shown), -1 none
@@ -89,6 +90,7 @@ typedef struct {
 
 #define D9_MASTER_DEF 15.0f
 #define D9_MASTER_MAX 30.0f
+#define D9_COMP_DEF 0.5f
 
 void d9_state_init(d9_state_t *s);
 // After loading: everything back in range.

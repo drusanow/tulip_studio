@@ -193,6 +193,7 @@ static struct {
     int meter_px[STUDIO_MAX_MODULES];
     lv_obj_t *pmark[STUDIO_MAX_MODULES];   // the peak, a tick over the bar
     int pmark_px[STUDIO_MAX_MODULES];
+    int load_shown[STUDIO_MAX_MODULES];    // the DSP % on the tile
     int play_shown, bpm_shown;
     uint32_t mon_seq;
     // patches
@@ -271,6 +272,17 @@ static void mixer_poll(void) {
             H.meter_px[i] = px;
             lv_obj_set_width(H.meter[i], px);
             lv_obj_set_style_bg_color(H.meter[i], sw_c(rms > 0.25f ? SW_YELLOW : SW_GREEN), 0);
+        }
+        // what it costs: on the tile, next to ON
+        int ld = studio_module_on(i) ? studio_mix_load(i) : -1;
+        if (ld != H.load_shown[i] && H.state[i]) {
+            H.load_shown[i] = ld;
+            char t[16];
+            if (ld >= 0)
+                snprintf(t, sizeof t, "ON %d%%", ld);
+            else
+                snprintf(t, sizeof t, "OFF");
+            lv_label_set_text(H.state[i], t);
         }
         if (pk != H.pmark_px[i]) {
             H.pmark_px[i] = pk;
@@ -609,6 +621,7 @@ static void home_refresh(void) {
         else
             lv_obj_add_flag(H.tile[i], LV_OBJ_FLAG_HIDDEN);
         lv_label_set_text(H.state[i], on ? "ON" : "OFF");
+        H.load_shown[i] = -2;   // the meter poll adds the DSP %
         lv_obj_set_style_text_color(H.state[i], sw_c(on ? SW_GREEN : SW_DIM), 0);
         lv_obj_set_style_border_color(H.tile[i], sw_c(on ? SW_EDGE : SW_LINE), 0);
         sw_btn_text(H.on_b[i], on ? "ON" : "OFF");

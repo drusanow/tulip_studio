@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 
 #include "cJSON.h"
+#include "core/d9_comp.h"
 #include "core/d9_dsp.h"
 #include "core/d9_seq.h"
 #include "d9_app.h"
@@ -167,7 +168,8 @@ static QueueHandle_t s_trigq;
 static d9_engine_t s_eng;
 static d9_seq_t s_seq;
 static bool s_was_running;
-static volatile bool s_reseq;   // closed in Studio: pick up where the clock is when reopened
+static volatile bool s_reseq;
+static d9_comp_t s_comp;   // closed in Studio: pick up where the clock is when reopened
 
 #define BASE_GAIN 0.5f
 
@@ -197,6 +199,7 @@ static void render(float *l, float *r, const studio_block_t *b) {
     if (s_reseq) {
         s_reseq = false;
         d9_seq_init(&s_seq);
+    d9_comp_init(&s_comp);
     }
     d9_lock();
     int nh = d9_seq_run(&s_seq, &g_d9, &tl, tclock_tl_pos(&tl, t_end - 1), &g_d9_next, &sw, hits, 48);
@@ -239,6 +242,9 @@ static void render(float *l, float *r, const studio_block_t *b) {
         g_d9s.hit_ms[hits[i].lane] = (uint32_t)(tg / 1000);
     }
     d9_engine_render(&s_eng, &m, ev, nev, l, r, b->n);
+    // the drum bus: louder, without the peaks clipping (MIX page: COMP)
+    d9_comp_run(&s_comp, g_d9.comp, l, r, b->n, STUDIO_SR);
+    g_d9s.comp_gr = s_comp.gr;
     if (s_eng.peak > g_d9s.peak) g_d9s.peak = s_eng.peak;
     s_eng.peak = 0;
     g_d9s.playing = tl.running;

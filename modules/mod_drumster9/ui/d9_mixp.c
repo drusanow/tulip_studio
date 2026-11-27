@@ -15,7 +15,9 @@
 #define MET_LO (-48.0f)
 
 static struct {
-    sw_slider_t *lvl[D9_LANES], *master;
+    sw_slider_t *lvl[D9_LANES], *master, *comp;
+    lv_obj_t *gr;
+    int gr_shown;
     lv_obj_t *mute[D9_LANES], *solo[D9_LANES], *bus[D9_LANES], *meter, *db;
     float hold;
     int px;
@@ -29,6 +31,19 @@ static void set_v(void *ud, float v) {
 }
 static void text_v(void *ud, char *b, int n) { snprintf(b, n, "%d%%", (int)(g_d9.vol[(intptr_t)ud] * 100 + 0.5f)); }
 static const sw_slider_ops_t VOL = {get_v, set_v, text_v};
+
+static float get_c(void *ud) { return g_d9.comp; }
+static void set_c(void *ud, float v) {
+    g_d9.comp = v;
+    d9_edit();
+}
+static void txt_c(void *ud, char *b, int n) {
+    if (g_d9.comp <= 0.001f)
+        snprintf(b, n, "OFF");
+    else
+        snprintf(b, n, "%d%%", (int)(g_d9.comp * 100 + 0.5f));
+}
+static const sw_slider_ops_t COMP = {get_c, set_c, txt_c};
 
 static float get_m(void *ud) { return g_d9.master / D9_MASTER_MAX; }
 static void set_m(void *ud, float v) {
@@ -52,6 +67,7 @@ void d9_mix_page_refresh(void) {
         lv_obj_set_style_text_color(M.bus[l], sw_c(D9_BUS_COLOR[g_d9.bus[l]]), 0);
     }
     sw_slider_refresh(M.master);
+    sw_slider_refresh(M.comp);
 }
 
 static void mute_cb(void *ud) {
@@ -74,6 +90,15 @@ void d9_mix_page_tick(uint32_t ms) {
     if (ms - M.last < 33) return;
     float dt = (ms - M.last) / 1000.0f;
     M.last = ms;
+    // the compressor at work: how far it's pulling the peaks down
+    float cg = g_d9s.comp_gr;
+    int gr = g_d9.comp > 0.001f && cg > 0.01f && cg < 0.999f ? (int)(-20.0f * log10f(cg) + 0.5f) : 0;
+    if (gr != M.gr_shown) {
+        M.gr_shown = gr;
+        char t[24];
+        snprintf(t, sizeof t, gr ? "-%d dB" : "", gr);
+        lv_label_set_text(M.gr, t);
+    }
     float pk = g_d9s.peak;
     g_d9s.peak = 0;
     float db = pk > 1e-5f ? 20.0f * log10f(pk) : -96.0f;
@@ -104,9 +129,12 @@ void d9_mix_page_create(lv_obj_t *p) {
     sw_line(p, 12, ROW_Y0 + D9_LANES * ROW_DY, 860, 1);
     int y = ROW_Y0 + D9_LANES * ROW_DY + 14;
     sw_label(p, "MASTER", SW_F_LABEL, SW_GREEN, 12, y + 15, 0, false);
-    M.master = sw_slider(p, "OUT", 192, y, 600, 44, SW_GREEN, &MASTER, NULL);
-    sw_label(p, "MASTER 0 dB is the Python's 15; the Studio mixer comes after", SW_F_SMALL, C_DIM, 192,
-             y + 56, 0, false);
+    M.master = sw_slider(p, "OUT", 192, y, 340, 44, SW_GREEN, &MASTER, NULL);
+    M.comp = sw_slider(p, "COMP", 540, y, 252, 44, SW_ORANGE, &COMP, NULL);
+    M.gr = sw_label(p, "", SW_F_SMALL, SW_ORANGE, 808, y + 17, 0, false);
+    M.gr_shown = -1;
+    sw_label(p, "COMP squeezes the peaks and brings the kit up, level with the synths",
+             SW_F_SMALL, C_DIM, 192, y + 56, 0, false);
 
     // the meter
     sw_label(p, "OUT", SW_F_SMALL, C_DIM, MET_X + 6, 2, 0, false);

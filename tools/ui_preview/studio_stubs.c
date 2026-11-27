@@ -142,6 +142,7 @@ void studio_mix_set_mute(int m, bool on) { s_mute = on ? s_mute | (1u << m) : s_
 bool studio_mix_muted(int m) { return s_mute & (1u << m); }
 float studio_mix_peak(int m) { return m == 1 ? 0.9f : (m == 0 ? 0.3f : 0); }
 float studio_mix_rms(int m) { return m == 1 ? 0.12f : (m == 0 ? 0.2f : 0); }
+int studio_mix_load(int m) { return m == 1 ? 18 : (m == 4 ? 31 : 9); }
 
 // --- Drumster9's hardware: the samples partition is the image the tests pack -----------------
 #include <stdio.h>
