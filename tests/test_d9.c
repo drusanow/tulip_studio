@@ -7,6 +7,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "d9_comp.h"
 #include "d9_dsp.h"
 #include "d9_json.h"
 #include "d9_model.h"
@@ -431,7 +432,41 @@ static void test_json(void) {
     printf("projects: the sketch's file loads (lanes, buses, A-J, kit samples); round trip; junk\n");
 }
 
+// the drum-bus compressor: hits as the engine gives them (peaks ~0.5, its
+// -6 dB base gain) every 1/16 at 120 BPM come out louder on average, the
+// peak at or under full scale
+static void test_comp(void) {
+    static float l[48], r[48];
+    d9_comp_t c;
+    d9_comp_init(&c);
+    double in_sq = 0, out_sq = 0;
+    float out_pk = 0;
+    int nblk = 0;
+    for (int rep = 0; rep < 4; rep++)
+        for (int b = 0; b < 400; b++, nblk++) {
+            for (int i = 0; i < 48; i++) {
+                int f = b * 48 + i, since = f % 5512;   // a 1/16 at 120 BPM
+                float env = 0.5f * expf(-since / 2000.0f);
+                l[i] = r[i] = sinf(f * 0.31f) * env;
+                in_sq += l[i] * l[i];
+            }
+            d9_comp_run(&c, 0.6f, l, r, 48, 44100.0f);
+            for (int i = 0; i < 48; i++) {
+                out_sq += l[i] * l[i];
+                if (fabsf(l[i]) > out_pk) out_pk = fabsf(l[i]);
+            }
+        }
+    double gain_db = 10.0 * log10(out_sq / in_sq);
+    CHECK(gain_db > 4.0 && out_pk <= 1.0f, "comp: %+.1f dB louder, peak %.3f", gain_db, out_pk);
+    // off: untouched
+    for (int i = 0; i < 48; i++) l[i] = r[i] = 0.5f;
+    d9_comp_run(&c, 0.0f, l, r, 48, 44100.0f);
+    CHECK(l[0] == 0.5f && r[47] == 0.5f, "comp off changes nothing");
+    printf("comp: drums %+.1f dB louder on average, peak %.2f, OFF untouched\n", gain_db, out_pk);
+}
+
 int main(int argc, char **argv) {
+    test_comp();
     test_samples(argc > 1 ? argv[1] : "build/gamma9001.bin");
     test_model();
     test_seq();

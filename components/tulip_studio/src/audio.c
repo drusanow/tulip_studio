@@ -1,9 +1,9 @@
 // audio.c - the Studio audio engine: every running app's render() mixed
 // into one stereo stream to the Tulip's I2S DAC (44.1 kHz, 16 bit).
 //
-// Small DMA ring (4 x 48 frames = 4.4 ms), task on core 1 below the rt
-// task. Each block is rendered just before it's queued, so its first frame
-// reaches the DAC about 4 ms later - and the engine knows WHEN, in clock
+// DMA ring of 8 x 48 frames (8.7 ms), task on core 1 below the rt task.
+// Each block is rendered just before it's queued, so its first frame
+// reaches the DAC about 8 ms later - and the engine knows WHEN, in clock
 // microseconds: every block carries t0, the clock time its frame 0 is
 // heard. That mapping is a phase-locked estimate (below), so an app can put
 // a drum hit on the exact sample where the master clock says the step is.
@@ -14,6 +14,12 @@
 // slow first-order loop (1/16 per block) follows it: jitter in the task's
 // wake-up is filtered out, and any rate difference between the I2S clock
 // and the 1 MHz timer is tracked (it settles to a few us).
+//
+// Two cores: a worker on core 0 (above the UI) renders about half the apps
+// each block - the costliest first, each to whichever core has less so
+// far, by what each app's render took last time - while this task renders
+// the rest. Then this task mixes them all. An app is only ever rendered by
+// one task at a time, and the two meet once per block.
 #include <math.h>
 #include <string.h>
 
@@ -28,7 +34,7 @@
 
 static const char *TAG = "audio";
 
-#define DESC        4
+#define DESC        8   // deeper than the 4 it was: slack for a busy moment
 #define B           STUDIO_BLOCK
 #define AUDIO_CORE  1
 #define AUDIO_PRIO  (configMAX_PRIORITIES - 4)
@@ -36,9 +42,65 @@ static const char *TAG = "audio";
 
 static i2s_chan_handle_t s_tx;
 static float s_l[B], s_r[B];
-static float s_ml[B], s_mr[B];   // one module's block, before its fader
+// each app's block, before its fader (rendered on either core)
+static float s_ml[STUDIO_MAX_MODULES][B], s_mr[STUDIO_MAX_MODULES][B];
+static float s_cost[STUDIO_MAX_MODULES];          // its render time, us (smoothed)
+static volatile int s_load_mod[STUDIO_MAX_MODULES];   // ... as % of the block
+static uint8_t s_on_core0[STUDIO_MAX_MODULES];    // this block: the worker renders it
+static TaskHandle_t s_audio_task, s_worker;
+static const studio_block_t *volatile s_blk;      // the block being rendered
+
+static void render_one(int i, const studio_block_t *blk) {
+    memset(s_ml[i], 0, sizeof s_ml[i]);
+    memset(s_mr[i], 0, sizeof s_mr[i]);
+    int64_t t = esp_timer_get_time();
+    g_mods[i]->render(s_ml[i], s_mr[i], blk);
+    float us = (float)(esp_timer_get_time() - t);
+    s_cost[i] += (us - s_cost[i]) * 0.05f;
+}
+
+static bool wants_render(int i) { return g_enabled[i] && g_mods[i]->render; }
+
+static void worker_task(void *arg) {
+    for (;;) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        const studio_block_t *blk = s_blk;
+        for (int i = 0; i < g_nmods; i++)
+            if (s_on_core0[i]) render_one(i, blk);
+        xTaskNotifyGive(s_audio_task);
+    }
+}
+
+// split this block's apps between the cores: costliest first, each to the
+// core with less so far (core 1 also mixes: it starts a little behind)
+static int split(void) {
+    float c0 = 0, c1 = 60.0f;
+    bool done[STUDIO_MAX_MODULES] = {0};
+    int n0 = 0;
+    for (;;) {
+        int best = -1;
+        for (int i = 0; i < g_nmods; i++)
+            if (!done[i] && wants_render(i) && (best < 0 || s_cost[i] > s_cost[best])) best = i;
+        if (best < 0) break;
+        done[best] = true;
+        bool zero = s_worker && c0 < c1;
+        s_on_core0[best] = zero;
+        if (zero) {
+            c0 += s_cost[best] + 5.0f;
+            n0++;
+        } else {
+            c1 += s_cost[best] + 5.0f;
+        }
+    }
+    for (int i = 0; i < g_nmods; i++)
+        if (!done[i]) s_on_core0[i] = 0;
+    return n0;
+}
 static volatile float s_mgain[STUDIO_MAX_MODULES];
 static volatile float s_peak[STUDIO_MAX_MODULES];
+// loudness: the sum of squares since the UI last asked, and its frames
+static volatile float s_sq[STUDIO_MAX_MODULES];
+static volatile uint32_t s_sqn[STUDIO_MAX_MODULES];
 static int16_t s_out[B * 2];
 static volatile int s_load_pct;
 static volatile uint32_t s_underruns;
@@ -105,7 +167,16 @@ float studio_mix_peak(int m) {
     s_peak[m] = 0;   // (a race with the audio task only loses one block's peak)
     return p;
 }
+float studio_mix_rms(int m) {
+    if (m < 0 || m >= STUDIO_MAX_MODULES || !s_sqn[m]) return 0;
+    float r = sqrtf(s_sq[m] / (float)s_sqn[m]);
+    s_sq[m] = 0;   // (a race with the audio task only loses one block)
+    s_sqn[m] = 0;
+    return r;
+}
+
 int studio_audio_load_pct(void) { return s_load_pct; }
+int studio_mix_load(int m) { return m >= 0 && m < STUDIO_MAX_MODULES ? s_load_mod[m] : 0; }
 uint32_t studio_audio_underruns(void) { return s_underruns; }
 
 // Shown on screen: no sound is otherwise a silent failure. NULL = all well.
@@ -161,22 +232,34 @@ static void audio_task(void *arg) {
         int64_t c0 = studio_now_us();
         memset(s_l, 0, sizeof s_l);
         memset(s_r, 0, sizeof s_r);
+        // each app renders on its own (on one core or the other) ...
+        int n0 = split();
+        if (n0) {
+            s_blk = &blk;
+            xTaskNotifyGive(s_worker);
+        }
+        for (int i = 0; i < g_nmods; i++)
+            if (wants_render(i) && !s_on_core0[i]) render_one(i, &blk);
+        if (n0) ulTaskNotifyTake(pdTRUE, portMAX_DELAY);   // the worker's share is done
+        // ... then goes through its fader into the mix
         for (int i = 0; i < g_nmods; i++) {
-            const tmod_t *m = g_mods[i];
-            if (!g_enabled[i] || !m->render) continue;
-            // each app renders on its own, then goes through its fader
-            memset(s_ml, 0, sizeof s_ml);
-            memset(s_mr, 0, sizeof s_mr);
-            m->render(s_ml, s_mr, &blk);
-            float mg = s_mgain[i], pk = s_peak[i];
+            if (!wants_render(i)) {
+                s_load_mod[i] = 0;
+                continue;
+            }
+            s_load_mod[i] = (int)(s_cost[i] * (100.0f * STUDIO_SR / 1e6f / B) + 0.5f);
+            float mg = s_mgain[i], pk = s_peak[i], sq = 0;
             for (int k = 0; k < B; k++) {
-                float a = s_ml[k] * mg, b = s_mr[k] * mg;
+                float a = s_ml[i][k] * mg, b = s_mr[i][k] * mg;
                 s_l[k] += a;
                 s_r[k] += b;
                 float x = fabsf(a) > fabsf(b) ? fabsf(a) : fabsf(b);
                 if (x > pk) pk = x;
+                sq += 0.5f * (a * a + b * b);
             }
             s_peak[i] = pk;
+            s_sq[i] += sq;
+            s_sqn[i] += B;
         }
         float g = s_gain;
         for (int i = 0; i < B; i++) {
@@ -253,6 +336,13 @@ static esp_err_t i2s_init(void) {
 // I2S is set up from the audio task itself, so its interrupt is on core 1
 // with the rest of the audio, away from the panel's on core 0.
 static void audio_boot(void *arg) {
+    s_audio_task = xTaskGetCurrentTaskHandle();
+    // the second core's share: above the UI on core 0 (no audio, no worker:
+    // everything renders here, as before)
+    if (xTaskCreatePinnedToCore(worker_task, "audio1", 6144, NULL, AUDIO_PRIO, &s_worker, 0) != pdPASS) {
+        s_worker = NULL;
+        ESP_LOGW(TAG, "no audio worker on core 0: one core renders everything");
+    }
     esp_err_t e = i2s_init();
     if (e != ESP_OK) {
         s_err = e;

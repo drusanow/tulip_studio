@@ -4,5 +4,6 @@
 [mapping:mod_drumster9]
 archive: libmod_drumster9.a
 entries:
+    d9_comp (noflash)
     d9_dsp (noflash)
     d9_seq (noflash)

@@ -119,3 +119,19 @@ is the sketch's 15.
 
 **Needs a Tulip:** listening (levels against the AMY version), the CV clock on a DAC,
 and the DSP load next to the other four apps (the header shows Drumster9's).
+
+## COMP: the drum-bus compressor
+
+On the MIX page, next to OUT.
+
+* **Why:** drum samples peak near full scale but sit about 16 dB lower on average, so
+  next to a synth Drumster9 sounded quiet while its meter read high.
+* **What it does:** COMP squeezes the peaks and brings the whole kit up. A full-scale
+  peak comes out at about −1 dB, and a soft clip catches what's left.
+* **The control** runs from OFF (as before) to 100 %:
+  * the threshold goes down to −24 dB and the ratio up to 6:1;
+  * the attack is instant and the release about 80 ms;
+  * the readout beside it shows how far the peaks are being pulled down.
+* **Default:** 50 %. In the PC test (hits every 1/16, as the engine gives them), 60 %
+  makes the kit about 4 dB louder on average, with peaks under full scale.
+

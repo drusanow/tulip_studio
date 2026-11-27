@@ -5,7 +5,7 @@ with no MicroPython or AMY.
 
 **One set of apps, two ways to run them.** The start page has two sections:
 
-* **The apps, each on its own:** metroseq (sequencer), GinTonix and Drumster9 (drum
+* **The apps, each on its own:** metroseq and SEQ101 (sequencers), GinTonix and Drumster9 (drum
   machines), Sloe and Wavetron (synths).
 * **STUDIO:** the same apps together on one clock. Every app starts off; you switch on
   the ones you want.
@@ -82,6 +82,9 @@ tried on a Tulip).
   * A-J patterns that switch on the downbeat, 4 FX buses (reverb, echo, filter, drive,
     EQ), a mixer, and the CV clock.
   * The sketch's project file loads as it is.
+* **[SEQ101](docs/SEQ101.md)**: a 4-lane, 16-step note sequencer. Chords, note lengths
+  from 1/16 to a bar, an arpeggiator per lane, lane lengths of their own, 12 patterns a
+  lane with chains, and each lane to MIDI OUT, CV A / B or a synth on the Tulip.
 * **[`docs/templates/mod_example`](docs/templates/mod_example)**: the smallest complete
   app, as a template.
 
@@ -132,7 +135,30 @@ third_party/gamma9001/ the drum samples, from AMY (MIT)
 ## Flash it
 
 **First time:** flash the full image over USB. It holds the launcher and Tulip Studio
-(every app, preloaded), plus Drumster9's samples:
+(every app, preloaded), plus Drumster9's samples.
+
+### From a web browser (no install)
+
+1. Download `tulip-full.bin` from the latest
+   [release](https://github.com/drusanow/tulip_studio/releases/latest).
+2. Open Espressif's web flasher, **https://espressif.github.io/esptool-js/**, in
+   **Chrome or Edge** on a computer. Firefox and Safari can't talk to USB serial ports.
+3. Plug the Tulip into the computer with the **top USB port** (the UART one). If it
+   doesn't show up in step 4, hold **BOOT**, tap **RESET**, then let go of **BOOT**.
+4. Under **Program**:
+   * set **Baudrate** to `921600` (use `460800` if it fails);
+   * click **Connect**, and pick the Tulip's port in the browser's list (often
+     "USB JTAG/serial debug unit", "CP210x" or "USB Single Serial").
+
+   The page should then show `Chip is ESP32-S3`.
+5. Set **Flash Address** to `0x0`, choose `tulip-full.bin` as the file, and click
+   **Program**. It takes about 3 minutes for the 16 MB image.
+   * **Don't** click **Erase Flash** first: it would wipe `/files`, and the full
+     image doesn't need it.
+6. When it says it's done, press **RESET** on the Tulip, or unplug it and plug it back
+   in. The launcher starts, sets up `/files` on its first start, and shows the apps.
+
+### From a terminal
 
 ```sh
 pip install esptool
@@ -147,7 +173,9 @@ copies in `/files/apps` are hidden from the start page; delete them in FILES if 
 like.) To go back, flash a [Tulip release](https://github.com/shorepine/tulipcc/releases)
 the same way.
 
-**After that:** put apps on over Wi-Fi from the launcher's WI-FI page. See
+**After that:** you don't need to flash again. To update, download `studio.bin` from a
+newer release and put it on over Wi-Fi from the launcher's WI-FI page (or with
+`tools/tulip.py push studio.bin --launch`). See
 [docs/LAUNCHER.md](docs/LAUNCHER.md). To use your GinTonix banks and kits, copy your
 Tulip's `/user/gintonix` folder to `/files/gintonix`.
 
@@ -195,6 +223,14 @@ cd apps/studio && idf.py set-target esp32s3 && idf.py build
 **CV wiring:**
 * **TRK 1:** Mabee at 0x59. VOUT0 = gate (0/5 V), VOUT1 = pitch, 1 V/oct over the full
   0–10 V (C0 = 0 V, C10 = 10 V).
+* **Pitch range** (SET page): **0-10 V** for eurorack, or **0-5 V** for inputs that
+  take ±5 V, such as AMYboard. In 0-5 V, a note above 5 V drops by octaves
+  instead of clipping.
+* **With an AMYboard sketch (Megatron, Wavetron):**
+  * patch VOUT0 (gate) to CV1 and VOUT1 (pitch) to CV2;
+  * on metroseq's SET page, set Pitch range to **0-5 V**;
+  * on Megatron's CV CAL page, set **0V NOTE** to **12** (C0), so it reads volts the
+    way metroseq sends them. Its default, 60, puts every note 4 octaves high.
 * **TRK 2:** optional second Mabee with its A0 link cut (0x58).
 * **MERGE T2>T1:** both tracks share 0x59, with TRK 1 taking priority.
 * **MIDI:**

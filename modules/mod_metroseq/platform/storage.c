@@ -61,6 +61,7 @@ static volatile bool s_dirty_projects;
 static volatile bool s_dirty_cur;
 static int8_t s_cur;
 static int8_t s_swap_at;   // SWAP_AT_BAR unless set
+static int8_t s_cv_5v;
 
 static bool blob_ok(const pat_blob_t *b) {
     return b->magic == BLOB_MAGIC && b->version == PATTERN_VERSION &&
@@ -98,7 +99,7 @@ static void flush_now(void) {
     s_dirty_projects = false;
     bool cur = s_dirty_cur;
     s_dirty_cur = false;
-    int8_t cur_v = s_cur, swap_v = s_swap_at;
+    int8_t cur_v = s_cur, swap_v = s_swap_at, cv5_v = s_cv_5v;
     static pat_blob_t pb[NUM_PRESETS];
     static proj_bank_t bank;
     memcpy(pb, s_presets, sizeof pb);
@@ -117,6 +118,7 @@ static void flush_now(void) {
     if (cur) {
         nvs_set_i8(h, "cur", cur_v);
         nvs_set_i8(h, "swap_at", swap_v);
+        nvs_set_i8(h, "cv_5v", cv5_v);
     }
     nvs_commit(h);
     nvs_close(h);
@@ -195,6 +197,7 @@ void storage_init(void) {
         int8_t c;
         if (nvs_get_i8(h, "cur", &c) == ESP_OK && c >= 0 && c < NUM_PRESETS) s_cur = c;
         if (nvs_get_i8(h, "swap_at", &c) == ESP_OK && c >= 0 && c < SWAP_AT_COUNT) s_swap_at = c;
+        if (nvs_get_i8(h, "cv_5v", &c) == ESP_OK) s_cv_5v = c != 0;
         nvs_close(h);
     }
     s_proj.magic = BLOB_MAGIC;
@@ -216,6 +219,15 @@ int storage_swap_at(void) { return s_swap_at; }
 void storage_set_swap_at(int v) {
     if (v == s_swap_at || v < 0 || v >= SWAP_AT_COUNT) return;
     s_swap_at = (int8_t)v;
+    s_dirty_cur = true;   // written with the current preset
+    xTaskNotifyGive(s_task);
+}
+
+bool storage_cv_5v(void) { return s_cv_5v; }
+
+void storage_set_cv_5v(bool on) {
+    if (on == (bool)s_cv_5v) return;
+    s_cv_5v = on;
     s_dirty_cur = true;   // written with the current preset
     xTaskNotifyGive(s_task);
 }

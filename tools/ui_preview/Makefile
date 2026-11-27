@@ -7,6 +7,7 @@ GXM  = ../../modules/mod_gintonix
 SLM  = ../../modules/mod_sloe
 WTM  = ../../modules/mod_wavetron
 D9M  = ../../modules/mod_drumster9
+S1M  = ../../modules/mod_seq101
 ST   = ../../components/tulip_studio
 CJ   = ../../tests/vendor/cjson
 LA   = ../../launcher/main
@@ -19,8 +20,9 @@ ST_SRC = studio_preview.c studio_stubs.c $(ST)/src/shell.c $(ST)/src/widgets.c $
          $(wildcard $(GXM)/core/*.c) $(GXM)/gx_mod.c $(wildcard $(GXM)/ui/*.c) \
          $(SLM)/sloe_dsp.c $(SLM)/sloe_mod.c $(CJ)/cJSON.c $(HAL_UI) \
          $(wildcard $(WTM)/core/*.c) $(WTM)/wt_mod.c $(wildcard $(WTM)/ui/*.c) \
-         $(wildcard $(D9M)/core/*.c) $(D9M)/d9_mod.c $(wildcard $(D9M)/ui/*.c)
-ST_INC = -I$(D9M) -I$(D9M)/core -I$(D9M)/ui -I$(MS) -I$(MS)/platform -I$(GXM) -I$(GXM)/core -I$(GXM)/ui -I$(SLM) -I$(WTM) -I$(WTM)/core -I$(WTM)/ui -I$(ST)/include \
+         $(wildcard $(D9M)/core/*.c) $(D9M)/d9_mod.c $(wildcard $(D9M)/ui/*.c) \
+         $(wildcard $(S1M)/core/*.c) $(S1M)/s1_mod.c $(wildcard $(S1M)/ui/*.c)
+ST_INC = -I$(S1M) -I$(S1M)/core -I$(S1M)/ui -I$(D9M) -I$(D9M)/core -I$(D9M)/ui -I$(MS) -I$(MS)/platform -I$(GXM) -I$(GXM)/core -I$(GXM)/ui -I$(SLM) -I$(WTM) -I$(WTM)/core -I$(WTM)/ui -I$(ST)/include \
          -I$(ST)/src -I$(CJ) -DTULIP_FS_ROOT=\"files\"
 LA_SRC = launcher_preview.c $(wildcard $(LA)/ui/*.c) $(wildcard $(LA)/core/*.c) $(HAL_UI)
 

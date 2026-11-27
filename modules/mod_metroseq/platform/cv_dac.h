@@ -38,6 +38,11 @@ bool cv_dac_present(int out);
 bool cv_dac_gate_volts(int out, float volts);
 bool cv_dac_gate(int out, bool high);
 bool cv_dac_pitch_cents(int out, int32_t cents);   // midi * 100, 1V/oct
+// The highest pitch voltage sent: CV_MAX_V (10 V), or 5 V for inputs that
+// take +-5 V (AMYboard sketches such as Megatron). A note above it drops by
+// whole octaves until it fits, so it stays in key instead of clipping.
+void cv_dac_set_pitch_max(float volts);
+float cv_dac_pitch_max(void);
 
 void cv_dac_all_low(void);
 

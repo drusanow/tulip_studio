@@ -14,6 +14,8 @@
 #include "mod_sloe.h"
 #include "mod_wavetron.h"
 #include "mod_drumster9.h"
+#include "mod_seq101.h"
+#include "s1_app.h"
 #include "d9_app.h"
 #include "platform/preview_audio.h"
 #include "platform/storage.h"
@@ -64,6 +66,10 @@ const char *pat_swap_at_name(int v) {
     return v >= 0 && v < 4 ? N[v] : "?";
 }
 const char *pat_swap_when(void) { return "next bar"; }
+static bool s_cv5;
+bool storage_cv_5v(void) { return s_cv5; }
+void storage_set_cv_5v(bool on) { s_cv5 = on; }
+void cv_dac_set_pitch_max(float v) {}
 uint32_t pat_snapshot(pattern_t *d) {
     *d = g_pat;
     return s_swaps;
@@ -142,8 +148,8 @@ int main(void) {
     hx_init();
     hx_poll = shell_ui_poll;
     static const tmod_t *const mods[] = {&mod_metroseq, &mod_gintonix, &mod_sloe, &mod_wavetron,
-                                         &mod_drumster9};
-    studio_run(mods, 5);
+                                         &mod_drumster9, &mod_seq101};
+    studio_run(mods, 6);
     g_cfg.shown = -1;   // start on the home page
     g_cfg.bpm_x100 = 12400;
     studio_route_set(0, 0, 2);            // TRK 1 -> SLOE
@@ -152,7 +158,7 @@ int main(void) {
     preview_set_clock(true, false, false, 0);
     hx_pump(300);
     hx_save("studio_0_home_all_off");   // the Studio starts with every app off
-    for (int i = 0; i < 5; i++) shell_set_open(i, true);
+    for (int i = 0; i < 6; i++) shell_set_open(i, true);
     hx_pump(600);
     hx_save("studio_1_home");
 
@@ -346,6 +352,49 @@ int main(void) {
     hx_pump(100);
     hx_save("drumster9_6_set");
     hx_tap(440, 28);                          // back to SEQ
+
+    // SEQ101: something like the sketches - a line, held chords, two arps
+    {
+        memset(g_s1.pat, 0, sizeof g_s1.pat);
+        s1_pat_t *a = &g_s1.pat[0][0], *b = &g_s1.pat[1][2], *c = &g_s1.pat[2][2], *d = &g_s1.pat[3][0];
+        static const int8_t LINE[16] = {60, -1, -1, 64, -1, -1, -1, 72, -1, -1, -1, 76, -1, 72, 72, -1};
+        for (int i = 0; i < 16; i++)
+            if (LINE[i] >= 0) s1_step_default(&a->st[i], LINE[i]);
+        s1_step_default(&b->st[0], 60), b->st[0].chord = CH_MAJ, b->st[0].len = 8;
+        s1_step_default(&c->st[0], 64), c->st[0].chord = CH_MIN7, c->st[0].len = 16;
+        s1_step_default(&d->st[0], 48), d->st[0].chord = CH_MAJ, d->st[0].len = 8;
+        s1_step_default(&d->st[8], 55), d->st[8].chord = CH_SUS4, d->st[8].len = 8;
+        g_s1.lane[1].slot = 2;
+        g_s1.lane[2].slot = 2;
+        g_s1.lane[3].arp = 1, g_s1.lane[3].arp_mode = ARP_DOWN;
+        g_s1.lane[2].arp = 1, g_s1.lane[2].arp_rate = ARP_R8;
+        g_s1.lane[1].length = 12;
+        static const uint8_t CHAIN[4] = {0, 1, 2, 3};
+        memcpy(g_s1.lane[0].chain, CHAIN, 4), g_s1.lane[0].nchain = 4;
+        s1_step_default(&g_s1.pat[0][1].st[0], 62);
+        s1_step_default(&g_s1.pat[0][2].st[4], 65);
+        s1_step_default(&g_s1.pat[0][3].st[8], 67);
+        s1_ui_reload();
+    }
+    studio_show_module(5);
+    hx_pump(100);
+    hx_tap(66 + 3 * 53 + 25, 64 + 70 + 50);   // pick A's 4th step
+    hx_pump(100);
+    hx_save("seq101_1_steps");
+    hx_tap(462 + 52, 28);                     // PATTERNS
+    hx_pump(100);
+    hx_save("seq101_2_patterns");
+    s1_proj_save("Bass and pads");
+    s1_proj_save("Live set A");
+    hx_tap(572 + 52, 28);                     // PROJECTS
+    hx_pump(100);
+    hx_tap(12 + 165, 64 + 44 + 50 + 22);      // the second one
+    hx_pump(100);
+    hx_save("seq101_4_projects");
+    hx_tap(682 + 32, 28);                     // SET
+    hx_pump(200);
+    hx_save("seq101_3_set");
+    hx_tap(372 + 42, 28);                     // back to STEPS
 
     // a Studio patch: SAVE AS... with its keyboard, then it's in the list
     studio_show_home();

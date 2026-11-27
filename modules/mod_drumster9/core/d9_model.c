@@ -80,6 +80,7 @@ void d9_state_init(d9_state_t *s) {
     for (int k = 0; k < D9_KITS; k++) memcpy(s->kit_map[k], D9_KIT[k].s, sizeof s->kit_map[k]);
     for (int b = 0; b < D9_BUSES; b++) d9_bus_default(&s->fx[b]);
     s->master = D9_MASTER_DEF;
+    s->comp = D9_COMP_DEF;
     s->preset = -1;
 }
 
@@ -94,6 +95,7 @@ void d9_state_clamp(d9_state_t *s) {
     if (s->kit < 0 || s->kit >= D9_KITS) s->kit = 0;
     for (int b = 0; b < D9_BUSES; b++) d9_bus_clamp(&s->fx[b]);
     s->master = cl(s->master, 0, D9_MASTER_MAX);
+    s->comp = cl(s->comp, 0, 1);
     for (int i = 0; i < D9_BANKS; i++) {
         s->bank[i].used = s->bank[i].used ? 1 : 0;
         if (s->bank[i].kit < 0 || s->bank[i].kit >= D9_KITS) s->bank[i].kit = s->kit;

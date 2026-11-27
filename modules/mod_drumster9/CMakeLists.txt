@@ -1,5 +1,6 @@
 idf_component_register(
     SRCS
+        "core/d9_comp.c"
         "core/d9_dsp.c"
         "core/d9_json.c"
         "core/d9_model.c"

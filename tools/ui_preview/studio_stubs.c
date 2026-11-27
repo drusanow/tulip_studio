@@ -101,6 +101,10 @@ void studio_set_cv_clock(bool on, int div, int v1) {
     if (v1 >= 0) g_cfg.cv_vout1 = (uint8_t)v1;
 }
 bool studio_cv_clock(void) { return g_cfg.cv_clock; }
+bool studio_cv_mine(const tmod_t *m) { return true; }
+const tmod_t *studio_cv_owner(void) { return NULL; }
+bool studio_cv_write(const tmod_t *m, int dac, int ch, float v) { return true; }
+bool studio_cv_present(int dac) { return dac == 0; }
 int studio_cv_clock_div(void) { return g_cfg.cv_div; }
 int studio_cv_clock_vout1(void) { return g_cfg.cv_vout1; }
 int studio_cv_clock_state(void) { return g_cfg.cv_clock ? CVCLK_SEQUENCER : CVCLK_OFF; }
@@ -136,7 +140,9 @@ void studio_mix_set_level(int m, int p) { s_lv[m] = (uint8_t)p; }
 int studio_mix_level(int m) { return s_lv[m]; }
 void studio_mix_set_mute(int m, bool on) { s_mute = on ? s_mute | (1u << m) : s_mute & ~(1u << m); }
 bool studio_mix_muted(int m) { return s_mute & (1u << m); }
-float studio_mix_peak(int m) { return m == 1 ? 0.5f : (m == 0 ? 0.05f : 0); }
+float studio_mix_peak(int m) { return m == 1 ? 0.9f : (m == 0 ? 0.3f : 0); }
+float studio_mix_rms(int m) { return m == 1 ? 0.12f : (m == 0 ? 0.2f : 0); }
+int studio_mix_load(int m) { return m == 1 ? 18 : (m == 4 ? 31 : 9); }
 
 // --- Drumster9's hardware: the samples partition is the image the tests pack -----------------
 #include <stdio.h>
