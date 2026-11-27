@@ -58,7 +58,9 @@ static struct {
     lv_obj_t *b_title, *b_len, *b_ch, *b_cv[3], *b_slot;
     int sel_lane, sel_step;     // the picked note (step -1: none)
     int last_note[S1_LANES];    // what a new note starts as
-    int head[S1_LANES];         // playhead shown (owner cell)
+    int head[S1_LANES];         // the step the playhead marker shows (-1 hidden)
+    lv_obj_t *head_bar[S1_LANES];   // the playhead: a short bar under the lane, moved, never restyled
+    int shown_slot[S1_LANES], shown_len[S1_LANES];   // what the lane was drawn for
     lv_obj_t *key[KB_OCTS * 12], *key_dot[KB_OCTS * 12], *key_lbl[KB_OCTS * 12], *kb_oct;
     int kb_base;                // the keyboard's lowest C
     // PATTERNS
@@ -96,6 +98,11 @@ static void step_text(const s1_step_t *st, char *out, int n) {
         snprintf(out, n, "%s\n%s", nm, S1_CHORD_NAMES[st->chord]);
 }
 
+// (LVGL redraws a label whenever it's set, even to the same text)
+static void set_text(lv_obj_t *lbl, const char *t) {
+    if (strcmp(lv_label_get_text(lbl), t)) lv_label_set_text(lbl, t);
+}
+
 static void paint_cell(int l, int i) {
     cell_t *c = &U.cell[l][i];
     const s1_pat_t *p = cur_pat(l);
@@ -111,29 +118,29 @@ static void paint_cell(int l, int i) {
     int span = note ? s1_fit_len(p, len, i, st->len) : 1;
     lv_obj_set_width(c->box, span * CELL_P - (CELL_P - CELL_W));
     bool sel = l == U.sel_lane && i == U.sel_step;
-    bool head = U.head[l] == i;
     lv_obj_set_style_bg_color(c->box, sw_c(note ? LANE_C[l] : in ? 0x141414 : 0x050505), 0);
     lv_obj_set_style_border_color(c->box, sw_c(sel    ? SW_TEXT
-                                               : head ? ACC
                                                : note ? LANE_C[l]
                                                : in   ? SW_LINE
                                                       : 0x1c1c1c),   // past the lane's length
                                   0);
-    lv_obj_set_style_border_width(c->box, sel || head ? 3 : 1, 0);
+    lv_obj_set_style_border_width(c->box, sel ? 3 : 1, 0);
     if (note) {
         char t[16];
         step_text(st, t, sizeof t);
-        lv_label_set_text(c->txt, t);
+        set_text(c->txt, t);
         snprintf(t, sizeof t, "v%d", st->vel);
-        lv_label_set_text(c->vel, t);
+        set_text(c->vel, t);
     } else {
-        lv_label_set_text(c->txt, "");
-        lv_label_set_text(c->vel, "");
+        set_text(c->txt, "");
+        set_text(c->vel, "");
     }
 }
 
 static void paint_lane(int l) {
     for (int i = 0; i < S1_STEPS; i++) paint_cell(l, i);
+    U.shown_slot[l] = g_s1.lane[l].slot;
+    U.shown_len[l] = g_s1.lane[l].length;
     const s1_lane_t *ln = &g_s1.lane[l];
     sw_btn_set(U.lane_b[l], l == U.sel_lane);
     sw_btn_set(U.mute_b[l], ln->mute);
@@ -503,6 +510,8 @@ static void steps_create(lv_obj_t *p) {
             c->vel = sw_label(c->box, "", SW_F_SMALL, SW_BG, 0, ROW_H - 20, 0, false);
             lv_obj_align(c->vel, LV_ALIGN_BOTTOM_RIGHT, -4, -4);
         }
+        U.head_bar[l] = sw_box(p, CELL_X0, y + ROW_H, CELL_W, ROW_P - ROW_H, ACC, 0);
+        lv_obj_add_flag(U.head_bar[l], LV_OBJ_FLAG_HIDDEN);
         U.arp_b[l] = sw_btn(p, "ARP OFF", 918, y, 100, 36, ACC, arp_cb, (void *)(intptr_t)l, SW_F_SMALL);
         U.mode_b[l] = sw_btn(p, "UP", 918, y + 40, 48, 36, ACC, mode_cb, (void *)(intptr_t)l, SW_F_SMALL);
         U.rate_b[l] = sw_btn(p, "1/16", 970, y + 40, 48, 36, ACC, rate_cb, (void *)(intptr_t)l, SW_F_SMALL);
@@ -527,18 +536,28 @@ static void steps_create(lv_obj_t *p) {
 }
 
 // the playhead: one cell outlined per lane
+// Every UI pass: a lane whose pattern changed under it (a chain, a queued
+// pattern coming in) is redrawn at once, and each lane's playhead marker
+// moves - a small bar, so following the steps costs next to nothing.
 static void steps_tick(void) {
     for (int l = 0; l < S1_LANES; l++) {
-        int s = s1_play_step(l), h = -1;
-        if (s >= 0) {
-            h = s1_owner(cur_pat(l), g_s1.lane[l].length, s);
-            if (h < 0) h = s;
+        if (g_s1.lane[l].slot != U.shown_slot[l] || g_s1.lane[l].length != U.shown_len[l]) {
+            paint_lane(l);
+            if (l == U.sel_lane) {
+                U.sel_step = -1;   // the picked note was the old pattern's
+                paint_editor();
+                paint_bottom();
+            }
         }
-        if (h == U.head[l]) continue;
-        int old = U.head[l];
-        U.head[l] = h;
-        if (old >= 0) paint_cell(l, old);
-        if (h >= 0) paint_cell(l, h);
+        int s = s1_play_step(l);
+        if (s == U.head[l]) continue;
+        if (s < 0) {
+            lv_obj_add_flag(U.head_bar[l], LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_set_x(U.head_bar[l], CELL_X0 + s * CELL_P);
+            if (U.head[l] < 0) lv_obj_remove_flag(U.head_bar[l], LV_OBJ_FLAG_HIDDEN);
+        }
+        U.head[l] = s;
     }
 }
 
